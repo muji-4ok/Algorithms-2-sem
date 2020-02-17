@@ -1,7 +1,7 @@
 //
 // Created by egork on 17.02.2020.
 //
-// repository:
+// repository: https://github.com/muji-4ok/Algorithms-2-sem/tree/master
 #include <iostream>
 #include <vector>
 #include <algorithm>
