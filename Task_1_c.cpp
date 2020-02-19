@@ -4,6 +4,7 @@
 // repository: https://github.com/muji-4ok/Algorithms-2-sem/tree/master
 #include <iostream>
 #include <vector>
+#include <unordered_set>
 #include <algorithm>
 #include <memory>
 #include <queue>
@@ -57,14 +58,14 @@ int MatrixGraph::getNodeCount() const {
 }
 bool MatrixGraph::isStart(int node) const {
   for (int i = 0; i < getNodeCount(); ++i)
-    if (hasEdge(i, node))
+    if (i != node && hasEdge(i, node))
       return false;
 
   return true;
 }
 bool MatrixGraph::isFinish(int node) const {
   for (int i = 0; i < getNodeCount(); ++i)
-    if (hasEdge(node, i))
+    if (i != node && hasEdge(node, i))
       return false;
 
   return true;
@@ -120,9 +121,9 @@ void ListGraph::makeSorted(bool reverse = false) {
 ListGraph ListGraph::makeInverted() const {
   ListGraph newGraph(getNodeCount());
 
-  for (int v = 0; v < getNodeCount(); ++v)
-    for (int u : getChildren(v))
-      newGraph.addEdge(v, u);
+  for (int from = 0; from < getNodeCount(); ++from)
+    for (int to : getChildren(from))
+      newGraph.addEdge(to, from);
 
   return newGraph;
 }
@@ -149,7 +150,7 @@ void fillComponent(int start, int componentId,
       fillComponent(child, componentId, graph, component, collection);
 }
 
-MatrixGraph createAggregate(const ListGraph &graph) {
+ListGraph createAggregate(const ListGraph &graph) {
   std::vector<bool> visited(graph.getNodeCount(), false);
   std::vector<int> path;
 
@@ -169,28 +170,37 @@ MatrixGraph createAggregate(const ListGraph &graph) {
       ++curComponent;
     }
 
-  MatrixGraph aggregateGraph(fullComponents.size());
+  ListGraph aggregateGraph(fullComponents.size());
 
   for (int i = 0; i < fullComponents.size(); ++i)
-    for (int v : fullComponents[i])
+    for (int v : fullComponents[i]) {
+      std::unordered_set<int> children{};
+
       for (int u : graph.getChildren(v))
-        aggregateGraph.addEdge(i, component[u]);
+        children.insert(component[u]);
+
+      for (int j : children)
+        if (i != j)
+          aggregateGraph.addEdge(i, j);
+    }
 
   return aggregateGraph;
 }
 
 int solve(const ListGraph& graph) {
-  MatrixGraph aggregateGraph = createAggregate(graph);
-  int startCount = 0;
+  ListGraph aggregateGraph = createAggregate(graph);
   int finishCount = 0;
 
-  for (int i = 0; i < aggregateGraph.getNodeCount(); ++i) {
-    if (aggregateGraph.isStart(i))
-      ++startCount;
-
-    if (aggregateGraph.isFinish(i))
+  for (int i = 0; i < aggregateGraph.getNodeCount(); ++i)
+    if (aggregateGraph.getChildren(i).empty())
       ++finishCount;
-  }
+
+  ListGraph inverted = aggregateGraph.makeInverted();
+  int startCount = 0;
+
+  for (int i = 0; i < inverted.getNodeCount(); ++i)
+    if (inverted.getChildren(i).empty())
+      ++startCount;
 
   if (aggregateGraph.getNodeCount() == 1)
     return 0;
