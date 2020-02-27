@@ -55,8 +55,8 @@ int ListGraph::getNodeCount() const {
 }
 
 // In a undirected graph
-std::vector<int> getDistances(int start, const Graph *graph) {
-  std::vector<int> distances(graph->getNodeCount(), 0);
+std::vector<int> getDistances(int start, const Graph &graph) {
+  std::vector<int> distances(graph.getNodeCount(), 0);
   std::queue<int> queue;
   queue.push(start);
 
@@ -64,7 +64,7 @@ std::vector<int> getDistances(int start, const Graph *graph) {
     int vertex = queue.front();
     queue.pop();
 
-    for (const int &child : graph->getChildren(vertex)) {
+    for (const int &child : graph.getChildren(vertex)) {
       if (child == vertex || distances[child] || child == start) continue;
       distances[child] = distances[vertex] + 1;
       queue.push(child);
@@ -74,16 +74,15 @@ std::vector<int> getDistances(int start, const Graph *graph) {
   return distances;
 }
 
-int findMinDistance(const Graph *graph, int leon, int matilda, int milk) {
+int findMinDistance(const Graph &graph, int leon, int matilda, int milk) {
   auto distsLeon = getDistances(leon, graph);
   auto distsMatilda = getDistances(matilda, graph);
   auto distsMilk = getDistances(milk, graph);
 
   int minDist = distsLeon[0] + distsMatilda[0] + distsMilk[0];
 
-  for (int i = 0; i < graph->getNodeCount(); ++i) minDist = std::min(minDist,
-                                                                     distsLeon[i] + distsMatilda[i]
-                                                                         + distsMilk[i]);
+  for (int i = 0; i < graph.getNodeCount(); ++i)
+    minDist = std::min(minDist, distsLeon[i] + distsMatilda[i] + distsMilk[i]);
 
   return minDist;
 }
@@ -105,5 +104,5 @@ int main() {
     graph.addEdge(v, u);
   }
 
-  std::cout << findMinDistance(&graph, leon, matilda, milk);
+  std::cout << findMinDistance(graph, leon, matilda, milk);
 }
