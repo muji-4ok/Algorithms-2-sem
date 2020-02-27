@@ -10,6 +10,12 @@ bool dfsWalk(int start, const Graph &graph, std::vector<char> &states, std::vect
 
   while (!stack.empty()) {
     int vertex = stack.back();
+
+    if (states[vertex] == 2) {
+      stack.pop_back();
+      continue;
+    }
+
     states[vertex] = 1;
 
     for (int child : graph.getChildren(vertex)) {
