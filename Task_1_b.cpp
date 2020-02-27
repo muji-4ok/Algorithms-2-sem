@@ -5,7 +5,6 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
-#include <queue>
 
 struct Graph {
   virtual void addNode() = 0;
@@ -55,55 +54,61 @@ int ListGraph::getNodeCount() const {
   return children.size();
 }
 void ListGraph::makeSorted(bool reverse = false) {
-  for (std::vector<int>& kids : children)
+  for (std::vector<int> &kids : children)
     if (reverse)
       std::sort(kids.rbegin(), kids.rend());
     else
       std::sort(kids.begin(), kids.end());
 }
 
-bool propogate(const Graph *graph,
-               int start,
-               std::vector<int> &states,
-               std::vector<int> &sequence) {
-  states[start] = 0;
+bool dfsWalk(int start, const Graph &graph, std::vector<char> &states, std::vector<int> &path) {
+  std::vector<int> stack;
+  stack.push_back(start);
 
-  for (int child : graph->getChildren(start)) {
-    if (states[child] == 0) {
-      return false;
-    } else if (states[child] == -1) {
+  while (!stack.empty()) {
+    int vertex = stack.back();
 
-      if (!propogate(graph, child, states, sequence))
+    if (states[vertex] == 2) {
+      stack.pop_back();
+      continue;
+    }
+
+    states[vertex] = 1;
+    const std::vector<int>& children = graph.getChildren(vertex);
+
+    for (int i = children.size() - 1; i >= 0; --i) {
+      if (states[children[i]] == 1) {
         return false;
+      } else if (states[children[i]] == 0) {
+        stack.push_back(children[i]);
+      }
+    }
+
+    while (!stack.empty() && states[stack.back()] == 1) {
+      path.push_back(stack.back());
+      states[stack.back()] = 2;
+      stack.pop_back();
     }
   }
 
-  sequence.push_back(start);
-  states[start] = 1;
   return true;
 }
 
 std::vector<int> solve(ListGraph& graph, const std::vector<bool>& isSource) {
 //  graph.makeSorted(true);
-  std::vector<int> sequence;
-  std::vector<int> states(graph.getNodeCount(), -1);
+  std::vector<int> path;
+  std::vector<char> states(graph.getNodeCount(), 0);
 
-  for (int i = 0; i < graph.getNodeCount(); ++i)
-    if (states[i] == -1) {
-      std::vector<int> path;
-
-      if (!propogate(&graph, i, states, path))
+  for (int i = 0; i < graph.getNodeCount(); ++i) {
+    if (states[i] == 0) {
+      if (!dfsWalk(i, graph, states, path))
         return {};
-
-//      std::reverse(path.begin(), path.end());
-
-      for (int v : path)
-        sequence.push_back(v);
     }
+  }
 
-  std::reverse(sequence.begin(), sequence.end());
+  std::reverse(path.begin(), path.end());
 
-  return sequence;
+  return path;
 }
 
 int main() {
