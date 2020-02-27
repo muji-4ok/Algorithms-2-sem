@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_set>
 #include <algorithm>
+#include <tuple>
 #include <memory>
 #include <queue>
 
@@ -17,60 +18,6 @@ struct Graph {
   virtual int getNodeCount() const = 0;
 };
 
-class MatrixGraph : public Graph {
- public:
-  explicit MatrixGraph(int nodeCount);
-  void addNode() override;
-  void addEdge(int start, int finish) override;
-  bool hasEdge(int start, int finish) const override;
-  const std::vector<int> &getChildren(int node) const override;
-  int getNodeCount() const override;
-  bool isStart(int node) const;
-  bool isFinish(int node) const;
-
- private:
-  std::vector<std::vector<bool>> matrix;
-};
-
-MatrixGraph::MatrixGraph(int nodeCount) : matrix(nodeCount, std::vector<bool>(nodeCount, false)) {
-}
-void MatrixGraph::addNode() {
-  for (auto &i : matrix)
-    i.push_back(false);
-
-  matrix.emplace_back(getNodeCount() + 1, false);
-}
-void MatrixGraph::addEdge(int start, int finish) {
-  matrix[start][finish] = true;
-}
-bool MatrixGraph::hasEdge(int start, int finish) const {
-  return matrix[start][finish];
-}
-const std::vector<int> &MatrixGraph::getChildren(int node) const {
-  std::vector<int> children;
-
-  for (int i = 0; i < getNodeCount(); ++i)
-    if (matrix[node][i])
-      children.push_back(i);
-}
-int MatrixGraph::getNodeCount() const {
-  return matrix.size();
-}
-bool MatrixGraph::isStart(int node) const {
-  for (int i = 0; i < getNodeCount(); ++i)
-    if (i != node && hasEdge(i, node))
-      return false;
-
-  return true;
-}
-bool MatrixGraph::isFinish(int node) const {
-  for (int i = 0; i < getNodeCount(); ++i)
-    if (i != node && hasEdge(node, i))
-      return false;
-
-  return true;
-}
-
 class ListGraph : public Graph {
  public:
   explicit ListGraph(int nodeCount);
@@ -79,9 +26,8 @@ class ListGraph : public Graph {
   bool hasEdge(int start, int finish) const override;
   const std::vector<int> &getChildren(int node) const override;
   int getNodeCount() const override;
-  void makeSorted(bool reverse);
   ListGraph makeInverted() const;
- public:
+
  private:
   std::vector<std::vector<int>> children;
 };
@@ -111,13 +57,7 @@ ListGraph::ListGraph(int nodeCount) : children(nodeCount, std::vector<int>()) {
 int ListGraph::getNodeCount() const {
   return children.size();
 }
-void ListGraph::makeSorted(bool reverse = false) {
-  for (std::vector<int> &kids : children)
-    if (reverse)
-      std::sort(kids.rbegin(), kids.rend());
-    else
-      std::sort(kids.begin(), kids.end());
-}
+
 ListGraph ListGraph::makeInverted() const {
   ListGraph newGraph(getNodeCount());
 
@@ -138,37 +78,106 @@ void dfs(int start, const Graph *graph, std::vector<bool> &visited, std::vector<
   path.push_back(start);
 }
 
-void fillComponent(int start, int componentId,
-                   const Graph *graph,
+void dfsWalk(int start, const Graph &graph, std::vector<char> &state, std::vector<int> &path) {
+  std::vector<int> stack;
+  stack.push_back(start);
+  state[start] = 1;
+  std::vector<int> curPath;
+
+  while (!stack.empty()) {
+    int vertex = stack.back();
+    stack.pop_back();
+    curPath.push_back(vertex);
+    int callCount = 0;
+
+    for (int child : graph.getChildren(vertex)) {
+      if (state[child] == 0) {
+        state[child] = 1;
+        stack.push_back(child);
+        ++callCount;
+      }
+    }
+
+    if (!callCount) {
+      for (int i = curPath.size() - 1; i >= 0; --i) {
+        path.push_back(curPath[i]);
+        state[curPath[i]] = 2;
+      }
+
+      curPath.clear();
+    }
+  }
+}
+
+std::vector<int> createDFSStack(const Graph &graph) {
+  std::vector<int> path;
+  std::vector<char> state(graph.getNodeCount(), 0);
+
+  for (int i = 0; i < graph.getNodeCount(); ++i)
+    if (!state[i])
+      dfsWalk(i, graph, state, path);
+
+  return path;
+}
+
+void fillComponent(int start,
+                   int componentId,
+                   const Graph &graph,
                    std::vector<int> &component,
                    std::vector<int> &collection) {
+  std::vector<int> stack;
+  stack.push_back(start);
   component[start] = componentId;
-  collection.push_back(start);
+  std::vector<int> curPath;
 
-  for (int child : graph->getChildren(start))
-    if (component[child] == -1)
-      fillComponent(child, componentId, graph, component, collection);
+  while (!stack.empty()) {
+    int vertex = stack.back();
+    stack.pop_back();
+    curPath.push_back(vertex);
+    int callCount = 0;
+
+    for (int child : graph.getChildren(vertex)) {
+      if (component[child] == -1) {
+        component[child] = -2;
+        stack.push_back(child);
+        ++callCount;
+      }
+    }
+
+    if (!callCount) {
+      for (int i = curPath.size() - 1; i >= 0; --i) {
+        collection.push_back(curPath[i]);
+        component[curPath[i]] = componentId;
+      }
+
+      curPath.clear();
+    }
+  }
+}
+
+std::tuple<std::vector<int>,
+           std::vector<std::vector<int>>> createComponents(const std::vector<int> &dfsStack,
+                                                           const Graph &invertedGraph) {
+  std::vector<std::vector<int>> fullComponents;
+  std::vector<int> component(invertedGraph.getNodeCount(), -1);
+  int curComponent = 0;
+
+  for (int i = dfsStack.size() - 1; i >= 0; --i)
+    if (component[dfsStack[i]] == -1) {
+      fullComponents.emplace_back();
+      fillComponent(dfsStack[i], curComponent, invertedGraph, component, fullComponents.back());
+      ++curComponent;
+    }
+
+  return {component, fullComponents};
 }
 
 ListGraph createAggregate(const ListGraph &graph) {
-  std::vector<bool> visited(graph.getNodeCount(), false);
-  std::vector<int> path;
-
-  for (int i = 0; i < graph.getNodeCount(); ++i)
-    if (!visited[i])
-      dfs(i, &graph, visited, path);
-
+  std::vector<int> dfsStack = createDFSStack(graph);
   ListGraph invertedGraph = graph.makeInverted();
   std::vector<std::vector<int>> fullComponents;
-  std::vector<int> component(graph.getNodeCount(), -1);
-  int curComponent = 0;
-
-  for (auto it = path.rbegin(); it != path.rend(); ++it)
-    if (component[*it] == -1) {
-      fullComponents.emplace_back();
-      fillComponent(*it, curComponent, &invertedGraph, component, fullComponents.back());
-      ++curComponent;
-    }
+  std::vector<int> component;
+  std::tie(component, fullComponents) = createComponents(dfsStack, invertedGraph);
 
   ListGraph aggregateGraph(fullComponents.size());
 
@@ -187,20 +196,21 @@ ListGraph createAggregate(const ListGraph &graph) {
   return aggregateGraph;
 }
 
-int solve(const ListGraph& graph) {
+int countFinished(const Graph *graph) {
+  int count = 0;
+
+  for (int i = 0; i < graph->getNodeCount(); ++i)
+    if (graph->getChildren(i).empty())
+      ++count;
+
+  return count;
+}
+
+int solve(const ListGraph &graph) {
   ListGraph aggregateGraph = createAggregate(graph);
-  int finishCount = 0;
-
-  for (int i = 0; i < aggregateGraph.getNodeCount(); ++i)
-    if (aggregateGraph.getChildren(i).empty())
-      ++finishCount;
-
   ListGraph inverted = aggregateGraph.makeInverted();
-  int startCount = 0;
-
-  for (int i = 0; i < inverted.getNodeCount(); ++i)
-    if (inverted.getChildren(i).empty())
-      ++startCount;
+  int finishCount = countFinished(&aggregateGraph);
+  int startCount = countFinished(&inverted);
 
   if (aggregateGraph.getNodeCount() == 1)
     return 0;
