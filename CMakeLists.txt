@@ -4,3 +4,4 @@ project(Algorithms_2sem)
 set(CMAKE_CXX_STANDARD 17)
 
 add_executable(Task_1_B Task_1_b.cpp)
+add_executable(GraphExtra GraphExtra/Graph.h GraphExtra/GraphExtra.cpp GraphExtra/ListGraph.cpp GraphExtra/ListGraph.h GraphExtra/MatrixGraph.cpp GraphExtra/MatrixGraph.h GraphExtra/GraphTraversal.cpp GraphExtra/GraphTraversal.h)
