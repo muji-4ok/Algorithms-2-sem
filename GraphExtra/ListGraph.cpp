@@ -3,6 +3,7 @@
 //
 
 #include "ListGraph.h"
+#include <algorithm>
 
 void ListGraph::addNode() {
   children.emplace_back();
