@@ -14,54 +14,48 @@
 #include "SetGraph.h"
 #include "EdgeSubGraph.h"
 
-std::vector<int> fillComponent(int start,
-                               const SetGraph &graph,
-                               std::vector<char> &state,
-                               std::vector<int> &collection) {
-  std::vector<int> cycle;
+std::vector<int> findCycle(int start, const SetSubGraph &graph) {
   std::vector<Edge> stack;
   stack.emplace_back(start, start);
-  bool hasCycles = false;
+  std::unordered_map<int, char> states;
+  std::vector<int> cycle;
 
   while (!stack.empty()) {
     int vertex, parent;
     vertex = stack.back().finish;
     parent = stack.back().start;
 
-    if (state[vertex] == 2) {
+    if (states[vertex] == 2) {
       stack.pop_back();
       continue;
     }
 
-    state[vertex] = 1;
+    states[vertex] = 1;
 
     for (int child : graph.getChildren(vertex)) {
-      if (state[child] == 1 && child != vertex && child != parent) {
-        if (!hasCycles) {
-          int i = stack.size() - 1;
-          std::unordered_map<int, bool> added;
+      if (states[child] == 1 && child != parent) {
+        int i = stack.size() - 1;
+        std::unordered_map<int, bool> added;
 
-          for (; stack[i].finish != child; --i) {
-            int &element = stack[i].finish;
+        for (; stack[i].finish != child; --i) {
+          int &element = stack[i].finish;
 
-            if (state[element] == 1 && !added[element]) {
-              cycle.push_back(element);
-              added[element] = true;
-            }
+          if (states[element] == 1 && !added[element]) {
+            cycle.push_back(element);
+            added[element] = true;
           }
-
-          cycle.push_back(stack[i].finish);
         }
 
-        hasCycles = true;
-      } else if (state[child] == 0) {
+        cycle.push_back(stack[i].finish);
+
+        return cycle;
+      } else if (states[child] == 0) {
         stack.emplace_back(vertex, child);
       }
     }
 
-    while (!stack.empty() && state[stack.back().finish] == 1) {
-      collection.push_back(stack.back().finish);
-      state[stack.back().finish] = 2;
+    while (!stack.empty() && states[stack.back().finish] == 1) {
+      states[stack.back().finish] = 2;
       stack.pop_back();
     }
   }
@@ -69,38 +63,93 @@ std::vector<int> fillComponent(int start,
   return cycle;
 }
 
+SetSubGraph fillComponent(int start,
+                          const SetGraph &graph,
+                          const std::unordered_set<int> &cutPoints,
+                          std::vector<char> &states) {
+  std::vector<Edge> stack;
+  stack.emplace_back(start, start);
+  SetSubGraph subGraph;
+  subGraph.addNode(start);
+
+  while (!stack.empty()) {
+    int vertex, parent;
+    vertex = stack.back().finish;
+    parent = stack.back().start;
+
+    if (states[vertex] == 2) {
+      stack.pop_back();
+      continue;
+    }
+
+    states[vertex] = 1;
+    bool canAddNew = cutPoints.find(vertex) == cutPoints.end();
+
+    for (int child : graph.getChildren(vertex)) {
+      if ((states[child] == 1 || states[child] == 2) && child != parent) {
+        subGraph.addEdge(vertex, child);
+        subGraph.addEdge(child, vertex);
+      } else if (states[child] == 0 && canAddNew) {
+        subGraph.addNode(child);
+        subGraph.addEdge(vertex, child);
+        subGraph.addEdge(child, vertex);
+        stack.emplace_back(vertex, child);
+      }
+    }
+
+    while (!stack.empty() && states[stack.back().finish] == 1) {
+      states[stack.back().finish] = 2;
+      stack.pop_back();
+    }
+  }
+
+  for (int v : subGraph.getVertices())
+    if (cutPoints.find(v) == cutPoints.end())
+      states[v] = 3;
+    else
+      states[v] = 0;
+
+  return subGraph;
+}
+
 // Returns vertices of cyclic subgraphs and a cycle for each of them
-std::tuple<std::vector<std::vector<int>>,
-           std::vector<std::vector<int>>> getCyclicComponents(const SetGraph &graph) {
-  std::vector<char> state(graph.getNodeCount(), 0);
-  std::vector<std::vector<int>> cyclicComponentsVertices;
+std::tuple<std::vector<SetSubGraph>, std::vector<std::vector<int>>> getCyclicComponents(
+    const SetGraph &graph,
+    const std::unordered_set<int> &cutPoints
+) {
+  std::vector<char> states(graph.getNodeCount(), 0);
+  std::vector<SetSubGraph> cyclicSubGraphs;
   std::vector<std::vector<int>> cycles;
 
   // Find all cyclic components
   for (int i = 0; i < graph.getNodeCount(); ++i) {
-    if (state[i] == 0) {
-      std::vector<int> vertices;
-      std::vector<int> cycle = fillComponent(i, graph, state, vertices);
+    if (states[i] == 0 && cutPoints.find(i) == cutPoints.end()) {
+      SetSubGraph subGraph = fillComponent(i, graph, cutPoints, states);
+
+//      std::cout << subGraph.toString();
+
+      std::vector<int> cycle = findCycle(i, subGraph);
 
       if (!cycle.empty()) {
-        cyclicComponentsVertices.push_back(std::move(vertices));
-        cycles.push_back(std::move(cycle));
+        cyclicSubGraphs.push_back(std::move(subGraph));
+        cycles.push_back(cycle);
       }
     }
   }
 
-  return {cyclicComponentsVertices, cycles};
+  return {cyclicSubGraphs, cycles};
 }
 
-void walkBridges(int start,
-                 const SetGraph &graph,
-                 std::vector<int> &inTimes,
-                 std::vector<int> &outTimes,
-                 std::vector<char> &states,
-                 std::vector<Edge> &bridges) {
+void walkCutPoints(int start,
+                   const SetGraph &graph,
+                   std::vector<int> &inTimes,
+                   std::vector<int> &outTimes,
+                   std::vector<char> &states,
+                   std::unordered_set<int> &cutPoints) {
   std::vector<Edge> stack;
   stack.emplace_back(start, start);
   int time = 0;
+  int startCuts = 0;
 
   while (!stack.empty()) {
     int vertex, parent;
@@ -113,7 +162,7 @@ void walkBridges(int start,
     ++time;
 
     for (int child : graph.getChildren(vertex)) {
-      if (states[child] >= 1 && child != vertex && child != parent) {
+      if (states[child] >= 1 && child != parent) {
         outTimes[vertex] = std::min(outTimes[vertex], inTimes[child]);
       } else if (states[child] == 0) {
         stack.emplace_back(vertex, child);
@@ -121,30 +170,39 @@ void walkBridges(int start,
     }
 
     while (!stack.empty() && states[stack.back().finish] >= 1) {
-      vertex = stack.back().finish;
-      parent = stack.back().start;
-      outTimes[parent] = std::min(outTimes[parent], outTimes[vertex]);
+      if (states[stack.back().finish] == 1) {
+        vertex = stack.back().finish;
+        parent = stack.back().start;
+        outTimes[parent] = std::min(outTimes[parent], outTimes[vertex]);
 
-      if (outTimes[vertex] > inTimes[parent])
-        bridges.push_back(stack.back());
+        if (vertex != start && parent == start)
+          ++startCuts;
 
-      states[vertex] = 2;
+        if (parent != start && outTimes[vertex] >= inTimes[parent])
+          cutPoints.insert(parent);
+
+        states[vertex] = 2;
+      }
+
       stack.pop_back();
     }
   }
+
+  if (startCuts >= 2)
+    cutPoints.insert(start);
 }
 
-std::vector<Edge> getBridges(const SetGraph &graph) {
+std::unordered_set<int> getCutPoints(const SetGraph &graph) {
   std::vector<int> inTimes(graph.getNodeCount());
   std::vector<int> outTimes(graph.getNodeCount());
   std::vector<char> states(graph.getNodeCount(), 0);
-  std::vector<Edge> bridges;
+  std::unordered_set<int> cutPoints;
 
   for (int i = 0; i < graph.getNodeCount(); ++i)
     if (states[i] == 0)
-      walkBridges(i, graph, inTimes, outTimes, states, bridges);
+      walkCutPoints(i, graph, inTimes, outTimes, states, cutPoints);
 
-  return bridges;
+  return cutPoints;
 }
 
 //TODO: better organize face managing
@@ -156,7 +214,7 @@ std::vector<Edge> getBridges(const SetGraph &graph) {
 //};
 
 void addEdgeSegments(int start,
-                     const SetGraph &graph,
+                     const SetSubGraph &graph,
                      const EdgeSubGraph &laidGraph,
                      EdgeStorage &segmentEdges,
                      std::list<std::pair<SetSubGraph, std::set<int>>> &segments,
@@ -182,7 +240,7 @@ void addEdgeSegments(int start,
 
 void addComponentSegment(
     int start,
-    const SetGraph &graph,
+    const SetSubGraph &graph,
     const EdgeSubGraph &laidGraph,
     EdgeStorage &segmentEdges,
     std::list<std::pair<SetSubGraph, std::set<int>>> &segments,
@@ -341,11 +399,15 @@ std::tuple<int, int> findSplits(const std::vector<int> &splitted, int p1, int p2
 }
 
 void splitFace(int face,
-               const std::vector<int> &chain,
+               std::vector<int> chain,
                std::unordered_map<int, std::vector<int>> &faces,
                std::unordered_map<int, std::set<int>> &facesOfVertices) {
   int start, end;
   std::tie(start, end) = findSplits(faces[face], chain.front(), chain.back());
+
+  if (faces[face][start] == chain.back())
+    std::reverse(chain.begin(), chain.end());
+
   int newFace = faces.size();
 
   for (auto &it : facesOfVertices) {
@@ -441,8 +503,7 @@ void laySegment(std::list<std::pair<SetSubGraph, std::set<int>>>::iterator segme
   splitFace(face, chain, faces, facesOfVertices);
 }
 
-bool isPlanar(const SetGraph &graph,
-              const std::vector<int> &vertices,
+bool isPlanar(const SetSubGraph &graph,
               const std::vector<int> &cycle) {
   std::unordered_map<int, std::vector<int>> faces;
   faces[0] = cycle;
@@ -487,13 +548,13 @@ bool isPlanar(const SetGraph &graph,
 
     auto minSegment = segments.begin();
 
-//    std::cout << "Min Segment: \n";
-//    std::cout << minSegment->first.toString();
-
     for (auto it = segments.begin(); it != segments.end(); ++it)
       if (getCommonFaces(it->second, facesOfVertices)
           < getCommonFaces(minSegment->second, facesOfVertices))
         minSegment = it;
+
+//    std::cout << "Min Segment: \n";
+//    std::cout << minSegment->first.toString();
 
     if (getCommonFaces(minSegment->second, facesOfVertices).empty())
       return false;
@@ -506,6 +567,21 @@ bool isPlanar(const SetGraph &graph,
                faces,
                addedVertices);
 
+//    std::cout << "Segments: \n";
+//
+//    for (const auto &it : segments) {
+//      std::cout << it.first.toString();
+//
+//      std::cout << "Contact faces: ";
+//
+//      for (int v : it.second)
+//        std::cout << v << ' ';
+//
+//      std::cout << '\n';
+//    }
+//
+//    std::cout << '\n';
+//
 //    std::cout << "LaidGraph: \n";
 //    std::cout << laidGraph.toString() << '\n';
 //
@@ -515,40 +591,31 @@ bool isPlanar(const SetGraph &graph,
 }
 
 bool solve(SetGraph &graph) {
-  std::vector<Edge> bridges = getBridges(graph);
+  std::unordered_set<int> cutPoints = getCutPoints(graph);
 
-  for (const Edge &e : bridges) {
-    graph.removeEdge(e.start, e.finish);
-    graph.removeEdge(e.finish, e.start);
-  }
-
-//  for (Edge &e : bridges) {
-//    std::cout << e.start << ' ' << e.finish << '\n';
-//    graph.removeEdge(e.start, e.finish);
-//    graph.removeEdge(e.finish, e.start);
-//  }
+//  for (int v : cutPoints)
+//    std::cout << v << ' ';
 //
 //  std::cout << '\n';
 
-  std::vector<std::vector<int>> cyclicComponentsVertices;
+  std::vector<SetSubGraph> cyclicSubGraphs;
   std::vector<std::vector<int>> cycles;
-  std::tie(cyclicComponentsVertices, cycles) = getCyclicComponents(graph);
+  std::tie(cyclicSubGraphs, cycles) = getCyclicComponents(graph, cutPoints);
 
   for (int i = 0; i < cycles.size(); ++i) {
-    std::vector<int> &vertices = cyclicComponentsVertices[i];
+    SetSubGraph &subGraph = cyclicSubGraphs[i];
     std::vector<int> &cycle = cycles[i];
 
-//    for (int v : vertices)
-//      std::cout << v << ' ';
+//    std::cout << subGraph.toString() << '\n';
 //
-//    std::cout << '\n';
+//    std::cout << "Cycle: ";
 //
 //    for (int v : cycle)
 //      std::cout << v << ' ';
 //
 //    std::cout << '\n';
 
-    if (!isPlanar(graph, vertices, cycle))
+    if (!isPlanar(subGraph, cycle))
       return false;
   }
 
