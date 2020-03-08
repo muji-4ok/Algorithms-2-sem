@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <set>
 #include <algorithm>
+#include <cassert>
 #include "SetSubGraph.h"
 #include "SetGraph.h"
 #include "EdgeSubGraph.h"
@@ -146,17 +147,6 @@ std::vector<Edge> getBridges(const SetGraph &graph) {
   return bridges;
 }
 
-template<typename T>
-void intersectWith(std::set<T> &intersected, const std::set<T> &intersection) {
-  std::set<T> outSet;
-  std::set_intersection(intersected.begin(),
-                        intersected.end(),
-                        intersection.begin(),
-                        intersection.end(),
-                        std::inserter(outSet, outSet.begin()));
-  intersected = std::move(outSet);
-}
-
 //TODO: better organize face managing
 //class FaceManager {
 // public:
@@ -168,42 +158,41 @@ void intersectWith(std::set<T> &intersected, const std::set<T> &intersection) {
 void addEdgeSegments(int start,
                      const SetGraph &graph,
                      const EdgeSubGraph &laidGraph,
+                     EdgeStorage &segmentEdges,
                      std::list<std::pair<SetSubGraph, std::set<int>>> &segments,
                      const std::unordered_map<int, std::set<int>> &verticesInFaces) {
   for (int child : graph.getChildren(start)) {
-    if (laidGraph.hasNode(child) && !laidGraph.hasEdge(start, child)) {
+    if (laidGraph.hasNode(child) && !laidGraph.hasEdge(start, child)
+        && !segmentEdges.hasEdge(start, child)) {
       SetSubGraph segment{};
-      std::set<int> contactFaces;
+      std::set<int> contactPoints{start, child};
+
+      segmentEdges.addEdge(start, child);
+      segmentEdges.addEdge(child, start);
 
       segment.addNode(start);
       segment.addNode(child);
       segment.addEdge(start, child);
       segment.addEdge(child, start);
 
-      const std::set<int> &startFaces = verticesInFaces.at(start);
-      const std::set<int> &childFaces = verticesInFaces.at(child);
-      std::set_intersection(startFaces.begin(),
-                            startFaces.end(),
-                            childFaces.begin(),
-                            childFaces.end(),
-                            std::inserter(contactFaces, contactFaces.begin()));
-
-      segments.emplace_back(std::move(segment), std::move(contactFaces));
+      segments.emplace_back(std::move(segment), std::move(contactPoints));
     }
   }
 }
 
-std::pair<SetSubGraph, std::set<int>> buildComponentSegment(
+void addComponentSegment(
     int start,
     const SetGraph &graph,
     const EdgeSubGraph &laidGraph,
+    EdgeStorage &segmentEdges,
+    std::list<std::pair<SetSubGraph, std::set<int>>> &segments,
     const std::unordered_map<int, std::set<int>> &facesOfVertices
 ) {
   std::vector<int> stack;
   stack.push_back(start);
   std::unordered_map<int, char> states;
   SetSubGraph subGraph;
-  std::set<int> contactFaces{facesOfVertices.at(start)};
+  std::set<int> contactPoints{start};
   subGraph.addNode(start);
 
   while (!stack.empty()) {
@@ -216,20 +205,29 @@ std::pair<SetSubGraph, std::set<int>> buildComponentSegment(
 
     states[vertex] = 1;
 
-    if (laidGraph.hasNode(vertex))
-      intersectWith(contactFaces, facesOfVertices.at(vertex));
-
     for (int child : graph.getChildren(vertex)) {
-      if (laidGraph.hasEdge(vertex, child)
-          || (laidGraph.hasNode(vertex) && laidGraph.hasNode(child))) {
+      if (segmentEdges.hasEdge(vertex, child)
+          || (laidGraph.hasNode(vertex) && laidGraph.hasNode(child)))
         continue;
-      }
 
-      subGraph.addNode(child);
-      subGraph.addEdge(vertex, child);
+      if (laidGraph.hasNode(child)) {
+        // We are going inside laidGraph, which we don't want to do
+        subGraph.addNode(child);
+        subGraph.addEdge(vertex, child);
+        subGraph.addEdge(child, vertex);
 
-      if (states[child] == 0) {
-        stack.push_back(child);
+        segmentEdges.addEdge(vertex, child);
+        segmentEdges.addEdge(child, vertex);
+
+        contactPoints.insert(child);
+      } else {
+        subGraph.addNode(child);
+        subGraph.addEdge(vertex, child);
+        segmentEdges.addEdge(vertex, child);
+
+        if (states[child] == 0) {
+          stack.push_back(child);
+        }
       }
     }
 
@@ -239,8 +237,12 @@ std::pair<SetSubGraph, std::set<int>> buildComponentSegment(
     }
   }
 
-  return {subGraph, contactFaces};
+  // Actually have anything besides the starting vertex
+  if (subGraph.getNodeCount() > 1)
+    segments.emplace_back(std::move(subGraph), std::move(contactPoints));
 }
+
+// TODO: calculate paths when building segments
 
 std::unordered_map<int, int> buildPaths(int start, const SetSubGraph &segment) {
   std::unordered_map<int, int> parents;
@@ -293,6 +295,8 @@ std::tuple<int, int> findContacts(int face,
     }
   }
 
+  assert(start != -1 && end != -1);
+
   return {start, end};
 }
 
@@ -305,7 +309,7 @@ std::vector<int> buildChain(int face,
   std::unordered_map<int, int> parents = buildPaths(start, segment);
   std::vector<int> chain;
 
-  for (int i = end; i != start; i = parents[end])
+  for (int i = end; i != start; i = parents[i])
     chain.push_back(i);
 
   chain.push_back(start);
@@ -313,19 +317,116 @@ std::vector<int> buildChain(int face,
   return chain;
 }
 
-void laySegment(std::list<std::pair<SetSubGraph, std::set<int>>>::iterator segmentIndex,
-                EdgeSubGraph &laidGraph,
-                std::unordered_map<int, std::set<int>> &facesOfVertices,
-                std::list<std::vector<int>> &faces,
-                std::vector<int> &addedVertices) {
-  SetSubGraph &segment = segmentIndex->first;
-  std::set<int> contactFaces = segmentIndex->second;
-  int face = *contactFaces.begin();
-  std::vector<int> chain = buildChain(face, segment, laidGraph, facesOfVertices);
+std::tuple<int, int> findSplits(const std::vector<int> &splitted, int p1, int p2) {
+  int first = -1;
+  int second = -1;
+
+  for (int i = 0; i < splitted.size(); ++i) {
+    if (splitted[i] == p1 || splitted[i] == p2) {
+      if (first == -1)
+        first = i;
+      else if (second == -1)
+        second = i;
+      else
+        assert(false);
+    }
+  }
+
+  assert(first != -1 && second != -1);
+
+  if (second < first)
+    std::swap(first, second);
+
+  return {first, second};
+}
+
+void splitFace(int face,
+               const std::vector<int> &chain,
+               std::unordered_map<int, std::vector<int>> &faces,
+               std::unordered_map<int, std::set<int>> &facesOfVertices) {
+  int start, end;
+  std::tie(start, end) = findSplits(faces[face], chain.front(), chain.back());
+  int newFace = faces.size();
+
+  for (auto &it : facesOfVertices) {
+    for (int i = start + 1; i < end; ++i) {
+      if (it.first == faces[face][i]) {
+        it.second.erase(face);
+        it.second.insert(newFace);
+      }
+    }
+  }
 
   for (int v : chain) {
-    segment.removeNode(v);
+    facesOfVertices[v].insert(face);
+    facesOfVertices[v].insert(newFace);
+  }
 
+  std::vector<int> bufferFaceCycle;
+
+  for (int i = 0; i < start; ++i)
+    bufferFaceCycle.push_back(faces[face][i]);
+
+  for (int v : chain)
+    bufferFaceCycle.push_back(v);
+
+  for (int i = end + 1; i < faces[face].size(); ++i)
+    bufferFaceCycle.push_back(faces[face][i]);
+
+  std::vector<int> bufferNewFaceCycle;
+
+  for (int i = start + 1; i < end; ++i)
+    bufferNewFaceCycle.push_back(faces[face][i]);
+
+  for (int i = chain.size() - 1; i >= 0; --i)
+    bufferNewFaceCycle.push_back(chain[i]);
+
+  faces[face] = bufferFaceCycle;
+  faces[newFace] = bufferNewFaceCycle;
+}
+
+template<typename T>
+void intersectWith(std::set<T> &intersected, const std::set<T> &intersection) {
+  std::set<T> outSet;
+  std::set_intersection(intersected.begin(),
+                        intersected.end(),
+                        intersection.begin(),
+                        intersection.end(),
+                        std::inserter(outSet, outSet.begin()));
+  intersected = std::move(outSet);
+}
+
+std::set<int> getCommonFaces(const std::set<int> &contactPoints,
+                             const std::unordered_map<int, std::set<int>> &facesOfVertices) {
+  std::set<int> out{facesOfVertices.at(*contactPoints.begin())};
+
+  for (int v : contactPoints)
+    intersectWith(out, facesOfVertices.at(v));
+
+  return out;
+}
+
+void laySegment(std::list<std::pair<SetSubGraph, std::set<int>>>::iterator segmentIndex,
+                std::list<std::pair<SetSubGraph, std::set<int>>> &segments,
+                EdgeSubGraph &laidGraph,
+                EdgeStorage &segmentEdges,
+                std::unordered_map<int, std::set<int>> &facesOfVertices,
+                std::unordered_map<int, std::vector<int>> &faces,
+                std::vector<int> &addedVertices) {
+  SetSubGraph &segment = segmentIndex->first;
+  std::set<int> contactPoints = segmentIndex->second;
+  int face = *getCommonFaces(contactPoints, facesOfVertices).begin();
+  std::vector<int> chain = buildChain(face, segment, laidGraph, facesOfVertices);
+
+  // Segment completely removed, addedVertices are then processed
+  // Everything from segment deleted from segmentEdges
+  for (int v : segment.getVertices())
+    for (int u : segment.getChildren(v))
+      segmentEdges.removeEdge(v, u);
+
+  segments.erase(segmentIndex);
+
+  for (int v : chain) {
     if (!laidGraph.hasNode(v)) {
       addedVertices.push_back(v);
       laidGraph.addNode(v);
@@ -337,15 +438,15 @@ void laySegment(std::list<std::pair<SetSubGraph, std::set<int>>>::iterator segme
     laidGraph.addEdge(chain[i], chain[i - 1]);
   }
 
-  //TODO: split face, modify changed faces
+  splitFace(face, chain, faces, facesOfVertices);
 }
 
 bool isPlanar(const SetGraph &graph,
               const std::vector<int> &vertices,
               const std::vector<int> &cycle) {
-  std::list<std::vector<int>> faces;
-  faces.push_back(cycle);
-  faces.push_back(cycle);
+  std::unordered_map<int, std::vector<int>> faces;
+  faces[0] = cycle;
+  faces[1] = cycle;
   std::unordered_map<int, std::set<int>> facesOfVertices;
 
   for (int v : cycle) {
@@ -354,21 +455,14 @@ bool isPlanar(const SetGraph &graph,
   }
 
   EdgeSubGraph laidGraph(cycle);
+  EdgeStorage segmentEdges;
   std::list<std::pair<SetSubGraph, std::set<int>>> segments;
   std::vector<int> addedVertices{cycle};
 
   while (true) {
     for (int v : addedVertices) {
-      addEdgeSegments(v, graph, laidGraph, segments, facesOfVertices);
-      std::pair<SetSubGraph, std::set<int>>
-          component = buildComponentSegment(v, graph, laidGraph, facesOfVertices);
-
-      if (component.first.getNodeCount() > 1) {
-        if (component.second.empty())
-          return false;
-
-        segments.push_back(std::move(component));
-      }
+      addEdgeSegments(v, graph, laidGraph, segmentEdges, segments, facesOfVertices);
+      addComponentSegment(v, graph, laidGraph, segmentEdges, segments, facesOfVertices);
     }
 
     addedVertices.clear();
@@ -376,13 +470,47 @@ bool isPlanar(const SetGraph &graph,
     if (segments.empty())
       return true;
 
+//    std::cout << "Segments: \n";
+//
+//    for (const auto &it : segments) {
+//      std::cout << it.first.toString();
+//
+//      std::cout << "Contact faces: ";
+//
+//      for (int v : it.second)
+//        std::cout << v << ' ';
+//
+//      std::cout << '\n';
+//    }
+//
+//    std::cout << '\n';
+
     auto minSegment = segments.begin();
 
+//    std::cout << "Min Segment: \n";
+//    std::cout << minSegment->first.toString();
+
     for (auto it = segments.begin(); it != segments.end(); ++it)
-      if (it->second.size() < minSegment->second.size())
+      if (getCommonFaces(it->second, facesOfVertices)
+          < getCommonFaces(minSegment->second, facesOfVertices))
         minSegment = it;
 
-    laySegment(minSegment, laidGraph, facesOfVertices, faces, addedVertices);
+    if (getCommonFaces(minSegment->second, facesOfVertices).empty())
+      return false;
+
+    laySegment(minSegment,
+               segments,
+               laidGraph,
+               segmentEdges,
+               facesOfVertices,
+               faces,
+               addedVertices);
+
+//    std::cout << "LaidGraph: \n";
+//    std::cout << laidGraph.toString() << '\n';
+//
+//    std::cout << "SegmentEdges: \n";
+//    std::cout << segmentEdges.toString() << '\n';
   }
 }
 
@@ -394,13 +522,13 @@ bool solve(SetGraph &graph) {
     graph.removeEdge(e.finish, e.start);
   }
 
-  for (Edge &e : bridges) {
-    std::cout << e.start << ' ' << e.finish << '\n';
-    graph.removeEdge(e.start, e.finish);
-    graph.removeEdge(e.finish, e.start);
-  }
-
-  std::cout << '\n';
+//  for (Edge &e : bridges) {
+//    std::cout << e.start << ' ' << e.finish << '\n';
+//    graph.removeEdge(e.start, e.finish);
+//    graph.removeEdge(e.finish, e.start);
+//  }
+//
+//  std::cout << '\n';
 
   std::vector<std::vector<int>> cyclicComponentsVertices;
   std::vector<std::vector<int>> cycles;
@@ -410,15 +538,15 @@ bool solve(SetGraph &graph) {
     std::vector<int> &vertices = cyclicComponentsVertices[i];
     std::vector<int> &cycle = cycles[i];
 
-    for (int v : vertices)
-      std::cout << v << ' ';
-
-    std::cout << '\n';
-
-    for (int v : cycle)
-      std::cout << v << ' ';
-
-    std::cout << '\n';
+//    for (int v : vertices)
+//      std::cout << v << ' ';
+//
+//    std::cout << '\n';
+//
+//    for (int v : cycle)
+//      std::cout << v << ' ';
+//
+//    std::cout << '\n';
 
     if (!isPlanar(graph, vertices, cycle))
       return false;
@@ -442,5 +570,8 @@ int main() {
     }
   }
 
-  std::cout << solve(graph) << '\n';
+  if (solve(graph))
+    std::cout << "YES\n";
+  else
+    std::cout << "NO\n";
 }

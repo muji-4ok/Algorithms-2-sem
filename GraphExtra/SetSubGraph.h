@@ -8,10 +8,12 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <set>
+#include <string>
 
 class SetSubGraph {
  public:
   SetSubGraph() = default;
+  explicit SetSubGraph(int nodeCount);
   void addNode(int vertex);
   void removeNode(int vertex);
   bool hasNode(int vertex) const;
@@ -21,6 +23,7 @@ class SetSubGraph {
   const std::unordered_set<int> &getChildren(int node) const;
   const std::unordered_set<int> &getVertices() const;
   int getNodeCount() const;
+  std::string toString() const;
 
  private:
   std::unordered_set<int> vertices{};

@@ -7,6 +7,8 @@
 
 #include <vector>
 #include <unordered_set>
+#include <string>
+#include <unordered_map>
 
 class SetGraph {
  public:
@@ -17,6 +19,8 @@ class SetGraph {
   bool hasEdge(int start, int finish) const;
   const std::unordered_set<int> &getChildren(int node) const;
   int getNodeCount() const;
+  std::string toString() const;
+
  private:
   std::vector<std::unordered_set<int>> children;
 
