@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(BigInt)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Werror")
 
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)

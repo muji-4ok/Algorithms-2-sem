@@ -44,24 +44,37 @@ int main() {
 //  std::cout << "/: " << (r1 / r2) << '\n';
   std::srand(std::time(nullptr));
 
-  for (int i = 0; i < 100; ++i) {
-    int size1 = std::rand() % 20 + 1;
-    std::vector<int> buffer1;
+  for (int i = 0; i < 10000; ++i) {
+    int size1 = std::rand() % 50 + 1;
+    std::vector<int> buffer1{};
 
     for (int j = 0; j < size1; ++j)
-      buffer1.push_back(std::rand() % BigInteger::RADIX);
+//      buffer1.push_back(std::rand() % BigInteger::RADIX);
+      buffer1.push_back(std::rand() % 2);
 
-    int size2 = std::rand() % 20 + 1;
-    std::vector<int> buffer2;
+    int size2 = std::rand() % 50 + 1;
+    std::vector<int> buffer2{};
 
     for (int j = 0; j < size2; ++j)
-      buffer2.push_back(std::rand() % BigInteger::RADIX);
+//      buffer2.push_back(std::rand() % BigInteger::RADIX);
+      buffer2.push_back(std::rand() % 2);
 
     BigInteger b1(buffer1, std::rand() % 2);
     BigInteger b2(buffer2, std::rand() % 2);
     BigInteger b3 = b1 * b2;
+    BigInteger b4 = b1 + b2;
+    BigInteger b5 = b1 - b2;
+    BigInteger b6 = b2 ? b1.abs() / b2.abs() : 0;
+    BigInteger b7 = b2 ? b1.abs() % b2.abs() : 0;
 
-    std::cout << b3 << '\n';
+    std::cout << "--------" << i << "--------\n";
+    std::cout << "1: " << b1 << '\n';
+    std::cout << "2: " << b2 << '\n';
+    std::cout << "*: " << b3 << '\n';
+    std::cout << "+: " << b4 << '\n';
+    std::cout << "-: " << b5 << '\n';
+    std::cout << "/: " << b6 << '\n';
+    std::cout << "%: " << b7 << '\n';
   }
 
   return 0;

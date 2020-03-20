@@ -24,24 +24,25 @@ void reverse(std::vector<T> &vec) {
 void reverse(std::string &vec);
 
 class BigInteger {
+ public:
   constexpr static int RADIX_BITS = 8;
   constexpr static int RADIX = 1u << RADIX_BITS;
 
- public:
   BigInteger() = default;
 
   BigInteger(long long n);
+  BigInteger(const std::vector<int> &buffer, bool m_isPositive);
 
   BigInteger &operator+=(const BigInteger &other);
   BigInteger &operator-=(const BigInteger &other);
-  BigInteger& operator*= (const BigInteger &other);
+  BigInteger &operator*=(const BigInteger &other);
   BigInteger &operator/=(const BigInteger &other);
   BigInteger &operator%=(const BigInteger &other);
 
   BigInteger operator-() const;
-  BigInteger& operator++();
+  BigInteger &operator++();
   BigInteger operator++(int);
-  BigInteger& operator--();
+  BigInteger &operator--();
   BigInteger operator--(int);
 
   // Returns modulo
@@ -55,6 +56,8 @@ class BigInteger {
   explicit operator bool() const;
 
   std::string toString() const;
+
+  BigInteger abs() const;
 
   friend BigInteger operator*(const BigInteger &left, const BigInteger &right);
 

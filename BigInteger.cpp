@@ -69,17 +69,11 @@ void BigInteger::subtract(const BigInteger &other) {
     buffer[i] = subtractDigits(bigger->buffer[i], smaller->buffer[i], carry);
   }
 
-  // Last one might have carry
-  if (carry) {
-    buffer[i] = subtractDigits(bigger->buffer[i], 0, carry);
-    ++i;
-  }
-
   for (; i < bigger->buffer.size(); ++i) {
     if (buffer.size() <= i)
       buffer.emplace_back();
 
-    buffer[i] = bigger->buffer[i];
+    buffer[i] = subtractDigits(bigger->buffer[i], 0, carry);
   }
 
   normalize();
@@ -190,11 +184,16 @@ BigInteger operator%(const BigInteger &left, const BigInteger &right) {
   return result;
 }
 BigInteger::BigInteger(long long n) : m_isPositive(n >= 0) {
+  if (n == 0)
+    return;
+
   if (n < 0)
     n *= -1;
 
+  buffer.clear();
+
   for (int i = 0; n > 0; n /= RADIX, ++i)
-    buffer[i] = n % RADIX;
+    buffer.push_back(n % RADIX);
 }
 std::string BigInteger::toString() const {
   std::string result;
@@ -219,11 +218,11 @@ std::string BigInteger::toString() const {
 }
 BigInteger BigInteger::divmod(const BigInteger &divider) {
   assert(this->isPositive() && divider.isPositive() && divider);
-  std::vector<int> resultRevBuffer;
+  std::vector<int> resultRevBuffer{};
 
   while (*this >= divider) {
     int i = this->buffer.size() - 1;
-    std::vector<int> revBuffer;
+    std::vector<int> revBuffer{};
 
     while (divider.isPositiveGreater(revBuffer))
       revBuffer.push_back(this->buffer[i--]);
@@ -312,11 +311,18 @@ BigInteger &BigInteger::operator%=(const BigInteger &other) {
   return *this;
 }
 BigInteger::operator int() const {
-  if (buffer.size() == 1)
-    return buffer[0] * (isPositive() ? 1 : -1);
-  else
-    return ((static_cast<long long>(buffer[1]) << RADIX_BITS) + buffer[0])
-        * (isPositive() ? 1 : -1);
+  int res = 0;
+  size_t i = 0;
+
+  do {
+    res |= buffer[i] << (i * RADIX_BITS);
+    ++i;
+  } while (i < buffer.size() && (i * RADIX_BITS) < 32);
+
+  if ((res >= 0) != isPositive())
+    res = -res;
+
+  return res;
 }
 BigInteger::operator bool() const {
   return buffer.size() > 1 || buffer[0];
@@ -437,6 +443,16 @@ BigInteger BigInteger::pow(const BigInteger &power) const {
     BigInteger res = this->pow(powerHalf);
     return res * res;
   }
+}
+BigInteger::BigInteger(const std::vector<int> &buffer, bool m_isPositive)
+    : buffer(buffer), m_isPositive(m_isPositive) {
+  normalize();
+}
+BigInteger BigInteger::abs() const {
+  if (isPositive())
+    return *this;
+  else
+    return -(*this);
 }
 std::istream &operator>>(std::istream &in, BigInteger &bigInt) {
   std::string input;
