@@ -24,7 +24,7 @@ void reverse(std::vector<T> &vec) {
 void reverse(std::string &vec);
 
 class BigInteger {
-  constexpr static int RADIX_BITS = 30;
+  constexpr static int RADIX_BITS = 8;
   constexpr static int RADIX = 1u << RADIX_BITS;
 
  public:
@@ -82,7 +82,7 @@ class BigInteger {
 
   // Splits buffer into two parts:
   // everything before index into lower, and everything after into upper
-  void divideByIndex(int index, BigInteger &lower, BigInteger &upper) const;
+  void divideByIndex(size_t index, BigInteger &lower, BigInteger &upper) const;
   void addWithOffset(const BigInteger &other, int offset);
 
   int addDigits(int a, int b, int &carry) const;

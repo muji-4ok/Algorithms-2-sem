@@ -35,7 +35,7 @@ int BigInteger::multiplyDigits(int a, int b, int &carry) const {
 }
 void BigInteger::add(const BigInteger &other) {
   int carry = 0;
-  int i = 0;
+  size_t i = 0;
 
   for (; i < other.buffer.size(); ++i) {
     if (buffer.size() <= i)
@@ -53,7 +53,7 @@ void BigInteger::add(const BigInteger &other) {
 }
 void BigInteger::subtract(const BigInteger &other) {
   int carry = 0;
-  int i = 0;
+  size_t i = 0;
   const BigInteger *bigger = this;
   const BigInteger *smaller = &other;
 
@@ -166,7 +166,7 @@ bool operator!=(const BigInteger &left, const BigInteger &right) {
   return !(left == right);
 }
 void reverse(std::string &vec) {
-  for (int i = 0; i < vec.size() / 2; ++i)
+  for (size_t i = 0; i < vec.size() / 2; ++i)
     std::swap(vec[i], vec[vec.size() - 1 - i]);
 }
 BigInteger operator+(const BigInteger &left, const BigInteger &right) {
@@ -266,7 +266,7 @@ BigInteger BigInteger::multiplyByDigit(int d) const {
   assert(d >= 0);
   BigInteger result;
   int carry = 0;
-  int i = 0;
+  size_t i = 0;
   result.buffer.clear();
 
   for (; i < buffer.size(); ++i)
@@ -353,12 +353,11 @@ BigInteger operator*(const BigInteger &left, const BigInteger &right) {
     return result;
   }
 }
-void BigInteger::divideByIndex(int index, BigInteger &lower, BigInteger &upper) const {
-  assert(0 <= index);
+void BigInteger::divideByIndex(size_t index, BigInteger &lower, BigInteger &upper) const {
   lower.buffer.clear();
   lower.m_isPositive = m_isPositive;
 
-  for (int i = 0; i < index && i < buffer.size(); ++i)
+  for (size_t i = 0; i < index && i < buffer.size(); ++i)
     lower.buffer.push_back(buffer[i]);
 
   lower.normalize();
@@ -367,7 +366,7 @@ void BigInteger::divideByIndex(int index, BigInteger &lower, BigInteger &upper) 
     upper.buffer.clear();
     upper.m_isPositive = m_isPositive;
 
-    for (int i = index; i < buffer.size(); ++i)
+    for (size_t i = index; i < buffer.size(); ++i)
       upper.buffer.push_back(buffer[i]);
   } else {
     upper = BigInteger();
@@ -443,13 +442,13 @@ std::istream &operator>>(std::istream &in, BigInteger &bigInt) {
   std::string input;
   in >> input;
   bigInt = BigInteger();
-  int start = 0;
+  size_t start = 0;
 
   if (input[0] == '-') {
     ++start;
   }
 
-  for (int i = start; i < input.size(); ++i) {
+  for (size_t i = start; i < input.size(); ++i) {
     if (input[i] < '0' || input[i] > '9')
       throw std::runtime_error("Incorrect character");
 

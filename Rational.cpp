@@ -37,6 +37,12 @@ Rational::Rational(const BigInteger &n) : up(n) {
 Rational::Rational(const BigInteger &p, const BigInteger &q) : up(p), down(q) {
   normalize();
 }
+Rational::Rational(long long n) : Rational(BigInteger(n)) {
+
+}
+Rational::Rational(long long p, long long q) : Rational(BigInteger(p), BigInteger(q)) {
+
+}
 Rational &Rational::operator+=(const Rational &other) {
   BigInteger commonMultiple = lcm(down, other.down);
   up *= commonMultiple / down;

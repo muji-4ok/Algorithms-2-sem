@@ -16,7 +16,9 @@ BigInteger lcm(BigInteger a, BigInteger b);
 class Rational {
  public:
   Rational() = default;
-  explicit Rational(const BigInteger &n);
+  Rational(long long n);
+  Rational(long long p, long long q);
+  Rational(const BigInteger &n);
   Rational(const BigInteger &p, const BigInteger &q);
 
   Rational &operator+=(const Rational &other);
