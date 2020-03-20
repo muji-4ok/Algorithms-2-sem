@@ -15,27 +15,29 @@ void BigInteger::normalize() {
   if (buffer.back() == 0)
     m_isPositive = true;
 }
-int BigInteger::subtractDigits(int a, int b, int &carry) const {
+int BigInteger::subtractDigits(int a, int b, int &carry) {
   assert(a >= 0 && b >= 0 && carry >= 0);
   int res = a - b - carry;
   carry = res < 0;
   return (res + RADIX) % RADIX;
 }
-int BigInteger::addDigits(int a, int b, int &carry) const {
+int BigInteger::addDigits(int a, int b, int &carry) {
   assert(a >= 0 && b >= 0 && carry >= 0);
   int res = a + b + carry;
   carry = res / RADIX;
   return res % RADIX;
 }
-int BigInteger::multiplyDigits(int a, int b, int &carry) const {
+int BigInteger::multiplyDigits(int a, int b, int &carry) {
   assert(a >= 0 && b >= 0 && carry >= 0);
   long long res = static_cast<long long>(a) * b + carry;
   carry = static_cast<int>(res / RADIX);
   return static_cast<int>(res % RADIX);
 }
+// TODO: optimize - add
 void BigInteger::add(const BigInteger &other) {
   int carry = 0;
   size_t i = 0;
+  buffer.reserve(max(buffer.size(), other.buffer.size()));
 
   for (; i < other.buffer.size(); ++i) {
     if (buffer.size() <= i)
@@ -51,6 +53,7 @@ void BigInteger::add(const BigInteger &other) {
     buffer[i] = carry;
   }
 }
+// TODO: optimize - subtract
 void BigInteger::subtract(const BigInteger &other) {
   int carry = 0;
   size_t i = 0;
@@ -61,6 +64,8 @@ void BigInteger::subtract(const BigInteger &other) {
     std::swap(bigger, smaller);
     m_isPositive = !m_isPositive;
   }
+
+  buffer.reserve(bigger->buffer.size());
 
   for (; i < smaller->buffer.size(); ++i) {
     if (buffer.size() <= i)
@@ -195,6 +200,7 @@ BigInteger::BigInteger(long long n) : m_isPositive(n >= 0) {
   for (int i = 0; n > 0; n /= RADIX, ++i)
     buffer.push_back(n % RADIX);
 }
+// TODO: optimize - toString
 std::string BigInteger::toString() const {
   std::string result;
 
@@ -216,6 +222,7 @@ std::string BigInteger::toString() const {
 
   return result;
 }
+// TODO: optimize - divmod
 BigInteger BigInteger::divmod(const BigInteger &divider) {
   assert(this->isPositive() && divider.isPositive() && divider);
   std::vector<int> resultRevBuffer{};
@@ -327,37 +334,14 @@ BigInteger::operator int() const {
 BigInteger::operator bool() const {
   return buffer.size() > 1 || buffer[0];
 }
+// TODO: optimize - multiply
 BigInteger operator*(const BigInteger &left, const BigInteger &right) {
   assert(!left.buffer.empty() && !right.buffer.empty());
-
-  if (left.buffer.size() == 1) {
-    return right.multiplySingleDigit(left);
-  } else if (right.buffer.size() == 1) {
-    return left.multiplySingleDigit(right);
-  } else {
-//     L = a * 2 ^ (index) + b
-//     R = c * 2 ^ (index) + d
-    int index = max(left.buffer.size(), right.buffer.size()) / 2;
-    BigInteger leftLower;
-    BigInteger leftUpper;
-    left.divideByIndex(index, leftLower, leftUpper);
-
-    BigInteger rightLower;
-    BigInteger rightUpper;
-    right.divideByIndex(index, rightLower, rightUpper);
-
-    BigInteger bigMultiple = leftUpper * rightUpper;
-    BigInteger smallMultiple = leftLower * rightLower;
-    BigInteger mediumMultiple =
-        (leftLower + leftUpper) * (rightLower + rightUpper) - smallMultiple - bigMultiple;
-
-    BigInteger result;
-    result += smallMultiple;
-    result.addWithOffset(mediumMultiple, index);
-    result.addWithOffset(bigMultiple, index * 2);
-
-    return result;
-  }
+  BigInteger result;
+  result.m_isPositive = !(left.isPositive() ^ right.isPositive());
+  result.buffer = BigInteger::multiply(left.buffer, right.buffer);
+  result.normalize();
+  return result;
 }
 void BigInteger::divideByIndex(size_t index, BigInteger &lower, BigInteger &upper) const {
   lower.buffer.clear();
@@ -453,6 +437,151 @@ BigInteger BigInteger::abs() const {
     return *this;
   else
     return -(*this);
+int BigInteger::fastMod2() const {
+  return buffer[0] % 2;
+}
+std::vector<int> BigInteger::add(const std::vector<int> &left,
+                                 const std::vector<int> &right,
+                                 int leftStart,
+                                 int leftEnd,
+                                 int rightStart,
+                                 int rightEnd) {
+  if (leftEnd == -1)
+    leftEnd = left.size() - 1;
+
+  if (rightEnd == -1)
+    rightEnd = right.size() - 1;
+
+  int leftSize = leftEnd - leftStart + 1;
+  int rightSize = rightEnd - rightStart + 1;
+
+  std::vector<int> result(max(leftSize, rightSize), 0);
+  int carry = 0;
+  int i = 0;
+
+  for (; i < max(leftSize, rightSize); ++i) {
+    int l = leftStart + i <= leftEnd ? left[leftStart + i] : 0;
+    int r = rightStart + i <= rightEnd ? right[rightStart + i] : 0;
+    result[i] = addDigits(l, r, carry);
+  }
+
+  if (carry > 0) {
+    if (static_cast<int>(result.size()) <= i)
+      result.emplace_back();
+
+    result[i] = carry;
+  }
+
+  return result;
+}
+std::vector<int> BigInteger::multiply(const std::vector<int> &left,
+                                      const std::vector<int> &right,
+                                      int leftStart,
+                                      int leftEnd,
+                                      int rightStart,
+                                      int rightEnd) {
+  if (leftEnd == -1)
+    leftEnd = left.size() - 1;
+
+  if (rightEnd == -1)
+    rightEnd = right.size() - 1;
+
+  int leftSize = leftEnd - leftStart + 1;
+  int rightSize = rightEnd - rightStart + 1;
+
+  if (leftSize == 1) {
+    return multiplyByDigit(right, left[leftStart], rightStart, rightEnd);
+  } else if (rightSize == 1) {
+    return multiplyByDigit(left, right[rightStart], leftStart, leftEnd);
+  } else {
+    int index = max(leftSize, rightSize) / 2;
+
+    std::vector<int> bigMultiple = multiply(left,
+                                            right,
+                                            leftStart + index,
+                                            leftEnd,
+                                            rightStart + index,
+                                            rightEnd);
+    std::vector<int> smallMultiple = multiply(left,
+                                              right,
+                                              leftStart,
+                                              leftStart + index - 1,
+                                              rightStart,
+                                              rightStart + index - 1);
+    std::vector<int> leftSum = add(left, left,
+                                   leftStart, leftStart + index - 1,
+                                   leftStart + index, leftEnd);
+    std::vector<int> rightSum = add(right, right,
+                                    rightStart, rightStart + index - 1,
+                                    rightStart + index, rightEnd);
+    std::vector<int> mediumMultiple = multiply(leftSum, rightSum);
+    addWithOffset(mediumMultiple, smallMultiple, true);
+    addWithOffset(mediumMultiple, bigMultiple, true);
+
+    std::vector<int> result = smallMultiple;
+    addWithOffset(result, bigMultiple, true, index * 2);
+    addWithOffset(result, mediumMultiple, true, index);
+
+    return result;
+  }
+}
+std::vector<int> BigInteger::multiplyByDigit(const std::vector<int> &vec,
+                                             int d,
+                                             int start,
+                                             int end) {
+  if (end == -1)
+    end = vec.size() - 1;
+
+  std::vector<int> result;
+//  result.reserve(vec.size());
+  int carry = 0;
+  int i = start;
+
+  for (; i <= end; ++i)
+    result.emplace_back(multiplyDigits(vec[i], d, carry));
+
+  if (carry > 0)
+    result.emplace_back(carry);
+
+  normalize(result);
+
+  return result;
+}
+void BigInteger::addWithOffset(std::vector<int> &left,
+                               const std::vector<int> &right,
+                               bool subtract,
+                               int offset) {
+  int carry = 0;
+  size_t i = offset;
+
+  for (; i < max(left.size(), right.size()); ++i) {
+    if (left.size() <= i)
+      left.push_back(0);
+
+    int r = i < right.size() ? right[i] : 0;
+
+    if (subtract)
+      left[i] = subtractDigits(left[i], r, carry);
+    else
+      left[i] = addDigits(left[i], r, carry);
+  }
+
+  if (carry > 0) {
+    if (left.size() <= i)
+      left.emplace_back();
+
+    left[i] = carry;
+  }
+
+  normalize(left);
+}
+void BigInteger::normalize(std::vector<int> &vec) {
+  int i = vec.size() - 1;
+
+  while (vec[i] == 0 && i > 0) {
+    vec.pop_back();
+    --i;
+  }
 }
 std::istream &operator>>(std::istream &in, BigInteger &bigInt) {
   std::string input;

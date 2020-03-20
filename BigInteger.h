@@ -88,9 +88,45 @@ class BigInteger {
   void divideByIndex(size_t index, BigInteger &lower, BigInteger &upper) const;
   void addWithOffset(const BigInteger &other, int offset);
 
-  int addDigits(int a, int b, int &carry) const;
-  int subtractDigits(int a, int b, int &carry) const;
-  int multiplyDigits(int a, int b, int &carry) const;
+  // Ends are vec.size() - 1 by default
+  static std::vector<int> add(const std::vector<int> &left,
+                              const std::vector<int> &right,
+                              int leftStart = 0,
+                              int leftEnd = -1,
+                              int rightStart = 0,
+                              int rightEnd = -1);
+  // Ends are vec.size() - 1 by default
+//  static std::vector<int> subtract(const std::vector<int> &left,
+//                                   const std::vector<int> &right,
+//                                   int leftStart = 0,
+//                                   int leftEnd = -1,
+//                                   int rightStart = 0,
+//                                   int rightEnd = -1);
+  // Ends are vec.size() - 1 by default
+  static std::vector<int> multiply(const std::vector<int> &left,
+                                   const std::vector<int> &right,
+                                   int leftStart = 0,
+                                   int leftEnd = -1,
+                                   int rightStart = 0,
+                                   int rightEnd = -1);
+  // End is vec.size() - 1 by default
+  static std::vector<int> multiplyByDigit(const std::vector<int> &vec,
+                                          int d,
+                                          int start = 0,
+                                          int end = -1);
+  // If subtracting, left *MUST* be >= right
+  static void addWithOffset(std::vector<int> &left,
+                            const std::vector<int> &right,
+                            bool subtract = false,
+                            int offset = 0);
+  // Removes leading zeros
+  static void normalize(std::vector<int> &vec);
+
+  int fastMod2() const;
+
+  static int addDigits(int a, int b, int &carry);
+  static int subtractDigits(int a, int b, int &carry);
+  static int multiplyDigits(int a, int b, int &carry);
 
   // Both values are positive, checks which is less
   bool isPositiveLess(const BigInteger &other) const;
