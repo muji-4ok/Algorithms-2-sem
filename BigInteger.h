@@ -17,7 +17,7 @@
 
 template<typename T>
 void reverse(std::vector<T> &vec) {
-  for (int i = 0; i < vec.size() / 2; ++i)
+  for (size_t i = 0; i < vec.size() / 2; ++i)
     std::swap(vec[i], vec[vec.size() - 1 - i]);
 }
 
@@ -46,7 +46,7 @@ class BigInteger {
   BigInteger operator--(int);
 
   // Returns modulo
-  // both must be positive
+  // Ignores signs
   BigInteger divmod(const BigInteger &divider);
 
   // power must be non-negative
@@ -74,19 +74,11 @@ class BigInteger {
   // Different signs
   void subtract(const BigInteger &other);
 
-  // Handles signs
-  // other.buffer.size must be 1
-  BigInteger multiplySingleDigit(const BigInteger &other) const;
-  // Always positive, doesn't handle signs
-  BigInteger multiplyByDigit(int d) const;
   // divident and divider sizes differ in at most 1
   // both must be positive
-  int findQuotient(const BigInteger &divident, const BigInteger &divider) const;
-
-  // Splits buffer into two parts:
-  // everything before index into lower, and everything after into upper
-  void divideByIndex(size_t index, BigInteger &lower, BigInteger &upper) const;
-  void addWithOffset(const BigInteger &other, int offset);
+  static int findQuotient(const std::vector<int> &divident, const std::vector<int> &divider);
+  // Returns modulo
+  static std::vector<int> divmod(std::vector<int> &divisible, const std::vector<int> &divider);
 
   // Ends are vec.size() - 1 by default
   static std::vector<int> add(const std::vector<int> &left,
@@ -95,13 +87,6 @@ class BigInteger {
                               int leftEnd = -1,
                               int rightStart = 0,
                               int rightEnd = -1);
-  // Ends are vec.size() - 1 by default
-//  static std::vector<int> subtract(const std::vector<int> &left,
-//                                   const std::vector<int> &right,
-//                                   int leftStart = 0,
-//                                   int leftEnd = -1,
-//                                   int rightStart = 0,
-//                                   int rightEnd = -1);
   // Ends are vec.size() - 1 by default
   static std::vector<int> multiply(const std::vector<int> &left,
                                    const std::vector<int> &right,
@@ -118,9 +103,13 @@ class BigInteger {
   static void addWithOffset(std::vector<int> &left,
                             const std::vector<int> &right,
                             bool subtract = false,
-                            int offset = 0);
+                            int offset = 0,
+                            bool _normalize = true);
   // Removes leading zeros
   static void normalize(std::vector<int> &vec);
+
+  // zero <=> (size == 1 && vec[0] == 0)
+  static bool isEmpty(const std::vector<int> &vec);
 
   int fastMod2() const;
 
@@ -128,11 +117,9 @@ class BigInteger {
   static int subtractDigits(int a, int b, int &carry);
   static int multiplyDigits(int a, int b, int &carry);
 
-  // Both values are positive, checks which is less
-  bool isPositiveLess(const BigInteger &other) const;
-
-  // Compare against digits in reversed order
-  bool isPositiveGreater(const std::vector<int> &revBuffer) const;
+  static bool isLess(const std::vector<int> &left, const std::vector<int> &right);
+  // Second vec is in reversed order
+  static bool isGreaterReversed(const std::vector<int> &left, const std::vector<int> &revRight);
 
   // Always just enough space to store number
   std::vector<int> buffer{0};

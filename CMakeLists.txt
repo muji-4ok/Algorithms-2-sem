@@ -14,6 +14,9 @@ target_link_libraries(Rational BigInteger)
 add_executable(BigIntMain main.cpp)
 target_link_libraries(BigIntMain BigInteger Rational)
 
+add_executable(RunBigInts runBigInts.cpp)
+target_link_libraries(RunBigInts BigInteger Rational)
+
 add_executable(CTest mainTests.cpp BigInteger_test.cpp)
 target_include_directories(CTest PRIVATE ${GTEST_INCLUDE_DIRS})
 target_link_libraries(CTest ${GTEST_LIBRARIES} Threads::Threads)
