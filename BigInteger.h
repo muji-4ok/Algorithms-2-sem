@@ -25,8 +25,8 @@ void reverse(std::string &vec);
 
 class BigInteger {
  public:
-  constexpr static int RADIX_BITS = 8;
-  constexpr static int RADIX = 1u << RADIX_BITS;
+  constexpr static int RADIX_SIZE = 9;
+  constexpr static int RADIX = 1'000'000'000;
 
   BigInteger() = default;
 
@@ -61,6 +61,7 @@ class BigInteger {
 
   friend BigInteger operator*(const BigInteger &left, const BigInteger &right);
 
+  friend std::istream &operator>>(std::istream &in, BigInteger &bigInt);
   friend bool operator<(const BigInteger &left, const BigInteger &right);
   bool isPositive() const;
   void setPositive(bool value);
@@ -127,7 +128,6 @@ class BigInteger {
 };
 
 std::ostream &operator<<(std::ostream &out, const BigInteger &bigInt);
-std::istream &operator>>(std::istream &in, BigInteger &bigInt);
 bool operator<=(const BigInteger &left, const BigInteger &right);
 bool operator>(const BigInteger &left, const BigInteger &right);
 bool operator>=(const BigInteger &left, const BigInteger &right);

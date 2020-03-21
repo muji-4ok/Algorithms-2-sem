@@ -16,6 +16,7 @@ BigInteger factorial(int n) {
 }
 
 int main() {
+  std::cout << factorial(100);
 //  BigInteger b1;
 //  BigInteger b2;
 //  std::cin >> b1 >> b2;
@@ -42,6 +43,7 @@ int main() {
 //  std::cout << "-: " << (r1 - r2) << '\n';
 //  std::cout << "*: " << (r1 * r2) << '\n';
 //  std::cout << "/: " << (r1 / r2) << '\n';
+  /*
   std::srand(std::time(nullptr));
 
   for (int i = 0; i < 10000; ++i) {
@@ -78,4 +80,5 @@ int main() {
   }
 
   return 0;
+  */
 }

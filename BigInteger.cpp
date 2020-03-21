@@ -199,21 +199,15 @@ BigInteger::BigInteger(long long n) : m_isPositive(n >= 0) {
 std::string BigInteger::toString() const {
   std::string result;
 
-  BigInteger left(*this);
-  left.m_isPositive = true;
-
-  if (!left)
-    result.push_back('0');
-
-  while (left) {
-    BigInteger mod = left.divmod(10);
-    result.push_back('0' + mod.buffer[0]);
-  }
-
   if (!isPositive())
     result += '-';
 
-  reverse(result);
+  result += std::to_string(buffer.back());
+
+  for (int i = buffer.size() - 2; i >= 0; --i) {
+    std::string str = std::to_string(buffer[i]);
+    result += std::string(RADIX_SIZE - str.size(), '0') + str;
+  }
 
   return result;
 }
@@ -319,18 +313,15 @@ BigInteger &BigInteger::operator%=(const BigInteger &other) {
   return *this;
 }
 BigInteger::operator int() const {
-  int res = 0;
-  size_t i = 0;
+  int ret = buffer[0];
 
-  do {
-    res |= buffer[i] << (i * RADIX_BITS);
-    ++i;
-  } while (i < buffer.size() && (i * RADIX_BITS) < 32);
+  if (buffer.size() > 1)
+    ret += buffer[0] * RADIX;
 
-  if ((res >= 0) != isPositive())
-    res = -res;
+  if (!isPositive())
+    ret = -ret;
 
-  return res;
+  return ret;
 }
 BigInteger::operator bool() const {
   return buffer.size() > 1 || buffer[0];
@@ -565,24 +556,34 @@ std::istream &operator>>(std::istream &in, BigInteger &bigInt) {
   std::string input;
   in >> input;
   bigInt = BigInteger();
-  size_t start = 0;
+  int start = 0;
 
   if (input[0] == '-') {
     ++start;
   }
 
-  for (size_t i = start; i < input.size(); ++i) {
-    if (input[i] < '0' || input[i] > '9')
-      throw std::runtime_error("Incorrect character");
+  auto &SIZE =  BigInteger::RADIX_SIZE;
+  int i = input.size() - 1;
+  int j = 0;
 
-    bigInt += input[i] - '0';
+  for (; i - SIZE + 1 >= start; i -= SIZE, ++j) {
+    std::string sub = input.substr(i - SIZE + 1, SIZE);
 
-    if (i < input.size() - 1)
-      bigInt *= 10;
+    if ((int) bigInt.buffer.size() == j)
+      bigInt.buffer.push_back(0);
+
+    bigInt.buffer[j] = std::stoi(sub);
   }
 
-  if (input[0] == '-')
-    bigInt = -bigInt;
+  if ((int) bigInt.buffer.size() == j)
+    bigInt.buffer.push_back(0);
+
+  bigInt.buffer[j] = std::stoi(input.substr(max(start, i - SIZE + 1), i + 1));
+
+  if (bigInt)
+    bigInt.setPositive(input[0] != '-');
+
+  bigInt.normalize();
 
   return in;
 }
