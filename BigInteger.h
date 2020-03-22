@@ -8,20 +8,21 @@
 #include <vector>
 #include <string>
 #include <iostream>
-
-// Ассерты...
+#include <fstream>
 #include <cassert>
 
+#ifndef max
 #define max(a, b) ( (a) > (b) ? (a) : (b) )
+#endif
+#ifndef min
 #define min(a, b) ( (a) > (b) ? (b) : (a) )
+#endif
 
 template<typename T>
 void reverse(std::vector<T> &vec) {
   for (size_t i = 0; i < vec.size() / 2; ++i)
     std::swap(vec[i], vec[vec.size() - 1 - i]);
 }
-
-void reverse(std::string &vec);
 
 class BigInteger {
  public:
@@ -32,6 +33,7 @@ class BigInteger {
 
   BigInteger(long long n);
   BigInteger(const std::vector<int> &buffer, bool m_isPositive);
+  BigInteger(const std::string &str);
 
   BigInteger &operator+=(const BigInteger &other);
   BigInteger &operator-=(const BigInteger &other);
@@ -48,27 +50,27 @@ class BigInteger {
   // Returns modulo
   // Ignores signs
   BigInteger divmod(const BigInteger &divider);
+  void nonNormalDiv(const BigInteger &divider);
 
-  // power must be non-negative
-  BigInteger pow(const BigInteger &power) const;
+  BigInteger pow(size_t power) const;
 
-  explicit operator int() const;
   explicit operator bool() const;
 
   std::string toString() const;
+  // Used for printing strings with possible leading zeros, size is not trimming
+  // Very specific
+  std::string toStringFixedSize(bool skipLeadingZeros, int size) const;
 
   BigInteger abs() const;
 
   friend BigInteger operator*(const BigInteger &left, const BigInteger &right);
 
-  friend std::istream &operator>>(std::istream &in, BigInteger &bigInt);
+  friend bool operator==(const BigInteger &left, const BigInteger &right);
   friend bool operator<(const BigInteger &left, const BigInteger &right);
   bool isPositive() const;
   void setPositive(bool value);
 
  private:
-  explicit BigInteger(std::vector<int> &&reverseBuffer);
-
   void normalize();
   // Same sign
   void add(const BigInteger &other);
@@ -79,7 +81,10 @@ class BigInteger {
   // both must be positive
   static int findQuotient(const std::vector<int> &divident, const std::vector<int> &divider);
   // Returns modulo
-  static std::vector<int> divmod(std::vector<int> &divisible, const std::vector<int> &divider);
+  // Normalize divisible or not
+  static std::vector<int> divmod(std::vector<int> &divisible,
+                                 const std::vector<int> &divider,
+                                 bool _normalize = true);
 
   // Ends are vec.size() - 1 by default
   static std::vector<int> add(const std::vector<int> &left,
@@ -112,26 +117,27 @@ class BigInteger {
   // zero <=> (size == 1 && vec[0] == 0)
   static bool isEmpty(const std::vector<int> &vec);
 
-  int fastMod2() const;
-
   static int addDigits(int a, int b, int &carry);
   static int subtractDigits(int a, int b, int &carry);
   static int multiplyDigits(int a, int b, int &carry);
 
   static bool isLess(const std::vector<int> &left, const std::vector<int> &right);
   // Second vec is in reversed order
-  static bool isGreaterReversed(const std::vector<int> &left, const std::vector<int> &revRight);
+  // skipZeros - only revRights, leading(preceding) zeros
+  static bool isGreaterReversed(const std::vector<int> &left,
+                                const std::vector<int> &revRight,
+                                bool skipZeros = false);
 
   // Always just enough space to store number
   std::vector<int> buffer{0};
   bool m_isPositive = true;
 };
 
+std::istream &operator>>(std::istream &in, BigInteger &bigInt);
 std::ostream &operator<<(std::ostream &out, const BigInteger &bigInt);
 bool operator<=(const BigInteger &left, const BigInteger &right);
 bool operator>(const BigInteger &left, const BigInteger &right);
 bool operator>=(const BigInteger &left, const BigInteger &right);
-bool operator==(const BigInteger &left, const BigInteger &right);
 bool operator!=(const BigInteger &left, const BigInteger &right);
 
 BigInteger operator+(const BigInteger &left, const BigInteger &right);

@@ -21,9 +21,6 @@ BigInteger lcm(BigInteger a, BigInteger b) {
   return (a * b) / gcd(a, b);
 }
 void Rational::normalize() {
-  m_isPositive = !(up.isPositive() ^ down.isPositive());
-  up.setPositive(true);
-  down.setPositive(true);
   BigInteger common = gcd(up, down);
   up /= common;
   down /= common;
@@ -32,9 +29,14 @@ bool Rational::isPositive() const {
   return m_isPositive;
 }
 Rational::Rational(const BigInteger &n) : up(n) {
+  m_isPositive = up.isPositive();
+  up.setPositive(true);
   normalize();
 }
 Rational::Rational(const BigInteger &p, const BigInteger &q) : up(p), down(q) {
+  m_isPositive = (up) ? !(up.isPositive() ^ down.isPositive()) : true;
+  up.setPositive(true);
+  down.setPositive(true);
   normalize();
 }
 Rational::Rational(long long n) : Rational(BigInteger(n)) {
@@ -45,28 +47,34 @@ Rational::Rational(long long p, long long q) : Rational(BigInteger(p), BigIntege
 }
 Rational &Rational::operator+=(const Rational &other) {
   BigInteger commonMultiple = lcm(down, other.down);
-  up *= commonMultiple / down;
+  BigInteger thisUp = up * commonMultiple / down;
   BigInteger otherUp = other.up * commonMultiple / other.down;
 
-  up.setPositive(m_isPositive);
+  thisUp.setPositive(m_isPositive);
   otherUp.setPositive(other.m_isPositive);
 
-  up += otherUp;
+  thisUp += otherUp;
   down = commonMultiple;
+  m_isPositive = thisUp.isPositive();
+  thisUp.setPositive(true);
+  up = std::move(thisUp);
   normalize();
 
   return *this;
 }
 Rational &Rational::operator-=(const Rational &other) {
   BigInteger commonMultiple = lcm(down, other.down);
-  up *= commonMultiple / down;
+  BigInteger thisUp = up * commonMultiple / down;
   BigInteger otherUp = other.up * commonMultiple / other.down;
 
-  up.setPositive(m_isPositive);
+  thisUp.setPositive(m_isPositive);
   otherUp.setPositive(other.m_isPositive);
 
-  up -= otherUp;
+  thisUp -= otherUp;
   down = commonMultiple;
+  m_isPositive = thisUp.isPositive();
+  thisUp.setPositive(true);
+  up = std::move(thisUp);
   normalize();
 
   return *this;
@@ -74,7 +82,7 @@ Rational &Rational::operator-=(const Rational &other) {
 Rational &Rational::operator*=(const Rational &other) {
   up *= other.up;
   down *= other.down;
-  m_isPositive = !(m_isPositive ^ other.m_isPositive);
+  m_isPositive = (up) ? !(m_isPositive ^ other.m_isPositive) : true;
   normalize();
 
   return *this;
@@ -83,14 +91,17 @@ Rational &Rational::operator/=(const Rational &other) {
   assert(other);
   up *= other.down;
   down *= other.up;
-  m_isPositive = !(m_isPositive ^ other.m_isPositive);
+  m_isPositive = (up) ? !(m_isPositive ^ other.m_isPositive) : true;
   normalize();
 
   return *this;
 }
 Rational Rational::operator-() const {
   Rational copy(*this);
-  copy.m_isPositive = !m_isPositive;
+
+  if (copy)
+    copy.m_isPositive = !m_isPositive;
+
   return copy;
 }
 Rational::operator bool() const {
@@ -141,8 +152,13 @@ std::string Rational::asDecimal(size_t precision) const {
   asDecimal(whole, decimal, precision);
 
   result += whole.toString();
-  result += ',';
-  result += decimal.toString();
+
+  if (precision) {
+    result += '.';
+
+    std::string decimalStr = decimal.toStringFixedSize(false, precision);
+    result += decimalStr;
+  }
 
   return result;
 }
@@ -150,10 +166,17 @@ void Rational::asDecimal(BigInteger &whole, BigInteger &decimal, size_t precisio
   BigInteger pow10 = BigInteger(10).pow(precision);
   whole = up;
   decimal = whole.divmod(down);
-  decimal = (decimal * pow10) / down;
+  decimal *= pow10;
+  decimal.nonNormalDiv(down);
 }
 Rational::operator double() const {
   return std::stod(asDecimal(17));
+}
+BigInteger Rational::getNumerator() const {
+  return up * (isPositive() ? 1 : -1);
+}
+BigInteger Rational::getDenominator() const {
+  return down;
 }
 bool operator<=(const Rational &left, const Rational &right) {
   return !(right < left);

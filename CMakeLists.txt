@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(BigInt)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Werror")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
 
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
@@ -16,6 +16,12 @@ target_link_libraries(BigIntMain BigInteger Rational)
 
 add_executable(RunBigInts runBigInts.cpp)
 target_link_libraries(RunBigInts BigInteger Rational)
+
+add_executable(RunBigIntsIO runBigIntsIO.cpp)
+target_link_libraries(RunBigIntsIO BigInteger Rational)
+
+add_executable(RunRationals runRationals.cpp)
+target_link_libraries(RunRationals BigInteger Rational)
 
 add_executable(CTest mainTests.cpp BigInteger_test.cpp)
 target_include_directories(CTest PRIVATE ${GTEST_INCLUDE_DIRS})

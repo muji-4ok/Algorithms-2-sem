@@ -23,7 +23,7 @@ class Rational {
 
   Rational &operator+=(const Rational &other);
   Rational &operator-=(const Rational &other);
-  Rational& operator*= (const Rational &other);
+  Rational &operator*=(const Rational &other);
   Rational &operator/=(const Rational &other);
   Rational operator-() const;
 
@@ -34,13 +34,16 @@ class Rational {
 
   std::string toString() const;
   std::string asDecimal(size_t precision = 0) const;
-  void asDecimal(BigInteger &whole, BigInteger &decimal, size_t precision = 0) const;
 
   bool isPositive() const;
   void setPositive(bool value);
 
+  BigInteger getNumerator() const;
+  BigInteger getDenominator() const;
+
  private:
   void normalize();
+  void asDecimal(BigInteger &whole, BigInteger &decimal, size_t precision = 0) const;
 
   BigInteger up{0};
   BigInteger down{1};

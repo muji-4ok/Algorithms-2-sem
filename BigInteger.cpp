@@ -33,7 +33,6 @@ int BigInteger::multiplyDigits(int a, int b, int &carry) {
   carry = static_cast<int>(res / RADIX);
   return static_cast<int>(res % RADIX);
 }
-// TODO: optimize - add
 void BigInteger::add(const BigInteger &other) {
   int carry = 0;
   size_t i = 0;
@@ -51,7 +50,6 @@ void BigInteger::add(const BigInteger &other) {
     buffer.push_back(carry);
   }
 }
-// TODO: optimize - subtract
 void BigInteger::subtract(const BigInteger &other) {
   int carry = 0;
   size_t i = 0;
@@ -79,19 +77,39 @@ void BigInteger::subtract(const BigInteger &other) {
   normalize();
 }
 BigInteger &BigInteger::operator+=(const BigInteger &other) {
-  if (m_isPositive == other.m_isPositive) {
-    this->add(other);
+  if (this == &other) {
+    BigInteger copy(*this);
+
+    if (m_isPositive == other.m_isPositive)
+      copy.add(other);
+    else
+      copy.subtract(other);
+
+    *this = std::move(copy);
   } else {
-    this->subtract(other);
+    if (m_isPositive == other.m_isPositive)
+      add(other);
+    else
+      subtract(other);
   }
 
   return *this;
 }
 BigInteger &BigInteger::operator-=(const BigInteger &other) {
-  if (m_isPositive == other.m_isPositive) {
-    this->subtract(other);
+  if (this == &other) {
+    BigInteger copy(*this);
+
+    if (m_isPositive == other.m_isPositive)
+      copy.subtract(other);
+    else
+      copy.add(other);
+
+    *this = std::move(copy);
   } else {
-    this->add(other);
+    if (m_isPositive == other.m_isPositive)
+      subtract(other);
+    else
+      add(other);
   }
 
   return *this;
@@ -114,10 +132,18 @@ bool BigInteger::isLess(const std::vector<int> &left, const std::vector<int> &ri
     return false;
   }
 }
-bool BigInteger::isGreaterReversed(const std::vector<int> &left, const std::vector<int> &revRight) {
-  if (left.size() < revRight.size()) {
+bool BigInteger::isGreaterReversed(const std::vector<int> &left,
+                                   const std::vector<int> &revRight,
+                                   bool skipZeros) {
+  int zeroCount = 0;
+
+  if (skipZeros)
+    for (int i = 0; i < (int) revRight.size() - 2 && revRight[i] == 0; ++i)
+      ++zeroCount;
+
+  if (left.size() < revRight.size() - zeroCount) {
     return false;
-  } else if (left.size() > revRight.size()) {
+  } else if (left.size() > revRight.size() - zeroCount) {
     return true;
   } else {
     for (int i = left.size() - 1; i >= 0; --i)
@@ -154,14 +180,12 @@ bool operator>=(const BigInteger &left, const BigInteger &right) {
   return !(left < right);
 }
 bool operator==(const BigInteger &left, const BigInteger &right) {
-  return left <= right && left >= right;
+  // Very inefficient...
+//  return left <= right && left >= right;
+  return left.buffer == right.buffer && left.m_isPositive == right.m_isPositive;
 }
 bool operator!=(const BigInteger &left, const BigInteger &right) {
   return !(left == right);
-}
-void reverse(std::string &vec) {
-  for (size_t i = 0; i < vec.size() / 2; ++i)
-    std::swap(vec[i], vec[vec.size() - 1 - i]);
 }
 BigInteger operator+(const BigInteger &left, const BigInteger &right) {
   BigInteger result(left);
@@ -195,7 +219,43 @@ BigInteger::BigInteger(long long n) : m_isPositive(n >= 0) {
   for (int i = 0; n > 0; n /= RADIX, ++i)
     buffer.push_back(n % RADIX);
 }
-// TODO: optimize - toString
+std::string BigInteger::toStringFixedSize(bool skipLeadingZeros, int size) const {
+  std::string result;
+
+  if (!isPositive())
+    result += '-';
+
+  int i = buffer.size() - 1;
+
+  if (!skipLeadingZeros) {
+    for (; i > 0 && !buffer[i]; --i) {
+      size -= RADIX_SIZE;
+      result += std::string(RADIX_SIZE, '0');
+    }
+  }
+
+  std::string firstNonZero = std::to_string(buffer[i]);
+
+  if (!skipLeadingZeros) {
+    int zerosCount = size - firstNonZero.size() - RADIX_SIZE * i;
+
+    if (zerosCount)
+      result += std::string(zerosCount, '0');
+  }
+
+  result += firstNonZero;
+
+  for (int j = i - 1; j >= 0; --j) {
+    std::string str = std::to_string(buffer[j]);
+
+    if (RADIX_SIZE - str.size())
+      result += std::string(RADIX_SIZE - str.size(), '0');
+
+    result += str;
+  }
+
+  return result;
+}
 std::string BigInteger::toString() const {
   std::string result;
 
@@ -213,70 +273,66 @@ std::string BigInteger::toString() const {
 }
 BigInteger BigInteger::divmod(const BigInteger &divider) {
   assert(divider);
-  BigInteger mod;
-  mod.buffer = BigInteger::divmod(buffer, divider.buffer);
+
+  // If this == &divider
+  BigInteger copy(*this);
+  BigInteger::divmod(copy.buffer, divider.buffer);
+  copy.m_isPositive =
+      BigInteger::isEmpty(copy.buffer) ? true : !(isPositive() ^ divider.isPositive());
+  BigInteger mod = (*this) - (copy * divider);
+  *this = std::move(copy);
+
   return mod;
 }
-std::vector<int> BigInteger::divmod(std::vector<int> &divisible, const std::vector<int> &divider) {
-  // Reversed at first
-  std::vector<int> result{};
-  bool firstShift = true;
-  int freeShifts = 2;
+void BigInteger::nonNormalDiv(const BigInteger &divider) {
+  BigInteger::divmod(buffer, divider.buffer, false);
+}
+std::vector<int> BigInteger::divmod(std::vector<int> &divisible,
+                                    const std::vector<int> &divider,
+                                    bool _normalize) {
+  std::vector<int> result;
+  std::vector<int> divident;
+  int freeShifts = divider.size();
 
-  while (!(isLess(divisible, divider))) {
-    int i = divisible.size() - 1;
-    // Reversed at first
-    std::vector<int> divident{};
+  for (int i = divisible.size() - 1; i >= 0; --i) {
+    divident.push_back(divisible[i]);
 
-    while (isGreaterReversed(divider, divident)) {
-      divident.push_back(divisible[i--]);
-
-      // Cannot divide without shifting, so we "multiply" by zero
-      // At first we don't care, because we have zeroes only
-      if (!firstShift && freeShifts <= 0)
+    if (isGreaterReversed(divider, divident, true)) {
+      // Isn't divisible
+      // The very first one
+      if (freeShifts <= 0)
         result.push_back(0);
+    } else {
+      reverse(divident);
+      normalize(divident);
 
-      --freeShifts;
+      int quotient = findQuotient(divident, divider);
+      std::vector<int> multiple = multiplyByDigit(divider, quotient);
+      addWithOffset(divisible, multiple, true, i, false);
+      result.push_back(quotient);
+
+      divident.clear();
+
+      for (int j = divisible.size() - 1; j >= i; --j)
+        divident.push_back(divisible[j]);
     }
 
-    firstShift = false;
-    reverse(divident);
-
-    int quotient = findQuotient(divident, divider);
-    std::vector<int> multiple = multiplyByDigit(divider, quotient);
-    addWithOffset(divisible, multiple, true, i + 1, false);
-
-    result.push_back(quotient);
-
-    int zeroCount = 0;
-
-    while (divisible.size() > 1 && divisible.back() == 0) {
-      divisible.pop_back();
-      ++zeroCount;
-    }
-
-    if (isEmpty(divisible))
-      ++zeroCount;
-
-    bool exact = (multiple == divident);
-    freeShifts = 1 + !exact;
-
-    for (int j = 0; j < zeroCount - (int) multiple.size(); ++j)
-      result.push_back(0);
-
-    if (!isEmpty(divisible) && isLess(divisible, divider) && exact)
-      result.push_back(0);
+    --freeShifts;
   }
+
+  reverse(result);
+
+  if (divisible.empty())
+    divisible.push_back(0);
 
   if (result.empty())
     result.push_back(0);
 
-  reverse(result);
-
   std::swap(divisible, result);
 
-  // Just in case
-  normalize(divisible);
+  if (_normalize)
+    normalize(divisible);
+
   normalize(result);
 
   return result;
@@ -298,40 +354,24 @@ int BigInteger::findQuotient(const std::vector<int> &divident, const std::vector
 
   return low;
 }
-BigInteger::BigInteger(std::vector<int> &&reverseBuffer) : buffer{} {
-  while (!reverseBuffer.empty()) {
-    buffer.push_back(reverseBuffer.back());
-    reverseBuffer.pop_back();
-  }
-}
 BigInteger &BigInteger::operator/=(const BigInteger &other) {
   this->divmod(other);
   return *this;
 }
 BigInteger &BigInteger::operator%=(const BigInteger &other) {
-  *this = this->divmod(other);
+  BigInteger mod = this->divmod(other);
+  *this = std::move(mod);
   return *this;
-}
-BigInteger::operator int() const {
-  int ret = buffer[0];
-
-  if (buffer.size() > 1)
-    ret += buffer[0] * RADIX;
-
-  if (!isPositive())
-    ret = -ret;
-
-  return ret;
 }
 BigInteger::operator bool() const {
   return buffer.size() > 1 || buffer[0];
 }
-// TODO: optimize - multiply
 BigInteger operator*(const BigInteger &left, const BigInteger &right) {
   assert(!left.buffer.empty() && !right.buffer.empty());
   BigInteger result;
-  result.m_isPositive = !(left.isPositive() ^ right.isPositive());
   result.buffer = BigInteger::multiply(left.buffer, right.buffer);
+  result.m_isPositive =
+      (BigInteger::isEmpty(result.buffer)) ? true : !(left.isPositive() ^ right.isPositive());
   result.normalize();
   return result;
 }
@@ -341,9 +381,7 @@ BigInteger &BigInteger::operator*=(const BigInteger &other) {
 }
 BigInteger BigInteger::operator-() const {
   BigInteger result(*this);
-
-  if (*this)
-    result.m_isPositive = !m_isPositive;
+  result.setPositive(!m_isPositive);
 
   return result;
 }
@@ -366,20 +404,18 @@ BigInteger BigInteger::operator--(int) {
   return copy;
 }
 void BigInteger::setPositive(bool value) {
-  m_isPositive = value;
+  if (*this)
+    m_isPositive = value;
 }
-BigInteger BigInteger::pow(const BigInteger &power) const {
+BigInteger BigInteger::pow(size_t power) const {
   if (!power) {
     return 1;
   }
 
-  BigInteger powerHalf(power);
-  BigInteger mod2 = powerHalf.divmod(2);
-
-  if (mod2) {
+  if (power % 2) {
     return *this * this->pow(power - 1);
   } else {
-    BigInteger res = this->pow(powerHalf);
+    BigInteger res = this->pow(power / 2);
     return res * res;
   }
 }
@@ -393,9 +429,6 @@ BigInteger BigInteger::abs() const {
   else
     return -(*this);
 }
-int BigInteger::fastMod2() const {
-  return buffer[0] % 2;
-}
 std::vector<int> BigInteger::add(const std::vector<int> &left,
                                  const std::vector<int> &right,
                                  int leftStart,
@@ -408,6 +441,10 @@ std::vector<int> BigInteger::add(const std::vector<int> &left,
   if (rightEnd == -1)
     rightEnd = right.size() - 1;
 
+  assert(leftStart >= 0);
+  assert(rightStart >= 0);
+  assert(0 <= leftEnd && leftEnd < (int) left.size());
+  assert(0 <= rightEnd && rightEnd < (int) right.size());
   int leftSize = leftEnd - leftStart + 1;
   int rightSize = rightEnd - rightStart + 1;
 
@@ -442,11 +479,17 @@ std::vector<int> BigInteger::multiply(const std::vector<int> &left,
   if (rightEnd == -1)
     rightEnd = right.size() - 1;
 
+  assert(leftStart >= 0);
+  assert(rightStart >= 0);
+  assert(0 <= leftEnd && leftEnd < (int) left.size());
+  assert(0 <= rightEnd && rightEnd < (int) right.size());
   int leftSize = leftEnd - leftStart + 1;
   int rightSize = rightEnd - rightStart + 1;
 
-  if (leftSize <= 0 || rightSize <= 0 || leftStart >= static_cast<int>(left.size())
-      || rightStart >= static_cast<int>(right.size()))
+  if (leftSize <= 0 || leftStart >= (int) left.size())
+    return {0};
+
+  if (rightSize <= 0 || rightStart >= (int) right.size())
     return {0};
 
   if (leftSize == 1) {
@@ -465,15 +508,21 @@ std::vector<int> BigInteger::multiply(const std::vector<int> &left,
     std::vector<int> smallMultiple = multiply(left,
                                               right,
                                               leftStart,
-                                              leftStart + index - 1,
+                                              min(leftEnd, leftStart + index - 1),
                                               rightStart,
-                                              rightStart + index - 1);
-    std::vector<int> leftSum = add(left, left,
-                                   leftStart, leftStart + index - 1,
-                                   leftStart + index, leftEnd);
-    std::vector<int> rightSum = add(right, right,
-                                    rightStart, rightStart + index - 1,
-                                    rightStart + index, rightEnd);
+                                              min(rightEnd, rightStart + index - 1));
+    std::vector<int> leftSum = add(left,
+                                   left,
+                                   leftStart,
+                                   min(leftEnd, leftStart + index - 1),
+                                   leftStart + index,
+                                   leftEnd);
+    std::vector<int> rightSum = add(right,
+                                    right,
+                                    rightStart,
+                                    min(rightEnd, rightStart + index - 1),
+                                    rightStart + index,
+                                    rightEnd);
     std::vector<int> mediumMultiple = multiply(leftSum, rightSum);
     addWithOffset(mediumMultiple, smallMultiple, true);
     addWithOffset(mediumMultiple, bigMultiple, true);
@@ -496,7 +545,6 @@ std::vector<int> BigInteger::multiplyByDigit(const std::vector<int> &vec,
     return {0};
 
   std::vector<int> result;
-//  result.reserve(vec.size());
   int carry = 0;
   int i = start;
 
@@ -535,6 +583,7 @@ void BigInteger::addWithOffset(std::vector<int> &left,
   if (carry > 0) {
     assert((int) left.size() == i);
     assert(!subtract);
+
     left.push_back(carry);
   }
 
@@ -555,35 +604,38 @@ bool BigInteger::isEmpty(const std::vector<int> &vec) {
 std::istream &operator>>(std::istream &in, BigInteger &bigInt) {
   std::string input;
   in >> input;
-  bigInt = BigInteger();
+  bigInt = BigInteger(input);
+
+  return in;
+}
+BigInteger::BigInteger(const std::string &str) {
+  assert(!str.empty());
   int start = 0;
 
-  if (input[0] == '-') {
+  if (str[0] == '-') {
     ++start;
   }
 
-  auto &SIZE =  BigInteger::RADIX_SIZE;
-  int i = input.size() - 1;
+  auto &SIZE = BigInteger::RADIX_SIZE;
+  int i = str.size() - 1;
   int j = 0;
 
   for (; i - SIZE + 1 >= start; i -= SIZE, ++j) {
-    std::string sub = input.substr(i - SIZE + 1, SIZE);
+    std::string sub = str.substr(i - SIZE + 1, SIZE);
 
-    if ((int) bigInt.buffer.size() == j)
-      bigInt.buffer.push_back(0);
+    if ((int) buffer.size() == j)
+      buffer.push_back(0);
 
-    bigInt.buffer[j] = std::stoi(sub);
+    buffer[j] = std::stoi(sub);
   }
 
-  if ((int) bigInt.buffer.size() == j)
-    bigInt.buffer.push_back(0);
+  if (i > start - 1) {
+    if ((int) buffer.size() == j)
+      buffer.push_back(0);
 
-  bigInt.buffer[j] = std::stoi(input.substr(max(start, i - SIZE + 1), i + 1));
+    buffer[j] = std::stoi(str.substr(max(start, i - SIZE + 1), i - start + 1));
+  }
 
-  if (bigInt)
-    bigInt.setPositive(input[0] != '-');
-
-  bigInt.normalize();
-
-  return in;
+  normalize();
+  setPositive(str[0] != '-');
 }
