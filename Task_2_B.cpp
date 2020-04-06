@@ -1,20 +1,22 @@
 //
 // Created by egork on 06.04.2020.
 //
-// report: https://contest.yandex.ru/contest/17594/run-report/32062200/
+// report: https://contest.yandex.ru/contest/17594/run-report/32063637/
 #include <vector>
 #include <iostream>
 #include <algorithm>
 #include <cassert>
 
+template<typename T>
 struct Edge {
-  Edge(int start, int finish, int cost) : start(start), finish(finish), cost(cost) {}
+  Edge(int start, int finish, T cost) : start(start), finish(finish), cost(cost) {}
 
   int start;
   int finish;
-  int cost;
+  T cost;
 };
 
+template<typename T>
 class EdgeGraph {
  public:
   explicit EdgeGraph(int size, int expectedEdges = 0) : nodeCount(size) {
@@ -22,13 +24,13 @@ class EdgeGraph {
       edges.reserve(expectedEdges);
   }
 
-  void addEdge(int start, int finish, int cost) {
+  void addEdge(int start, int finish, T cost) {
     assert(0 <= start && start < nodeCount);
     assert(0 <= finish && finish < nodeCount);
     edges.emplace_back(start, finish, cost);
   }
 
-  const std::vector<Edge> &getEdges() const {
+  const std::vector<Edge<T>> &getEdges() const {
     return edges;
   }
 
@@ -38,10 +40,10 @@ class EdgeGraph {
 
  private:
   int nodeCount;
-  std::vector<Edge> edges;
+  std::vector<Edge<T>> edges;
 };
 
-int findMinDistance(const EdgeGraph &graph, int source, int destination, int maxPathLength) {
+int findMinDistance(const EdgeGraph<int> &graph, int source, int destination, int maxPathLength) {
   std::vector<int> distance(graph.getNodeCount(), INT32_MAX);
   std::vector<int> newDistance(distance);
   distance[source] = 0;
@@ -64,7 +66,7 @@ int main() {
   std::cin >> n >> m >> k >> s >> f;
   --s;
   --f;
-  EdgeGraph graph(n, m);
+  EdgeGraph<int> graph(n, m);
 
   for (int i = 0; i < m; ++i) {
     int start, finish, cost;
