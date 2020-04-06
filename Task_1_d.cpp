@@ -2,6 +2,7 @@
 // Created by egork on 29.02.2020.
 //
 // https://github.com/muji-4ok/Algorithms-2-sem
+// report: https://contest.yandex.ru/contest/17228/problems/D/
 #include <iostream>
 #include <vector>
 #include <list>
