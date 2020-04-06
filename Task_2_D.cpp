@@ -1,6 +1,7 @@
 //
 // Created by egork on 06.04.2020.
 //
+// report: https://contest.yandex.ru/contest/17594/run-report/32069113/
 #include <iostream>
 #include "PackedBitMatrix.h"
 
