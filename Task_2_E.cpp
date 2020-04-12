@@ -1,6 +1,7 @@
 //
 // Created by egork on 07.04.2020.
 //
+// report: https://contest.yandex.ru/contest/17594/run-report/32205639/
 #include <iostream>
 #include <vector>
 #include <algorithm>
