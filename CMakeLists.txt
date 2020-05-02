@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
-project(Algorithms_2sem)
+project(Geometry)
 
 set(CMAKE_CXX_STANDARD 17)
+
+add_executable(Geometry main.cpp)
+
