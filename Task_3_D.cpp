@@ -45,6 +45,10 @@ bool tryExpand(const ListGraph &graph,
   return false;
 }
 
+int parity(int i, int rowSize) {
+  return (i / rowSize + i % rowSize) % 2;
+}
+
 int findMaxMatches(const ListGraph &graph, int rowSize) {
   std::vector<int> match(graph.getNodeCount(), -1);
   std::vector<bool> used(graph.getNodeCount(), false);
@@ -57,7 +61,7 @@ int findMaxMatches(const ListGraph &graph, int rowSize) {
   int matches = 0;
 
   for (int i = 0; i < graph.getNodeCount(); ++i)
-    if ((i / rowSize + i % rowSize) % 2 && match[i] != -1)
+    if (parity(i, rowSize) && match[i] != -1)
       ++matches;
 
   return matches;
