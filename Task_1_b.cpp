@@ -15,7 +15,7 @@ struct Graph {
   virtual int getNodeCount() const = 0;
 };
 
-class ListGraph : public Graph {
+class ListGraph final : public Graph {
  public:
   explicit ListGraph(int nodeCount);
   void addNode() override;
@@ -24,7 +24,6 @@ class ListGraph : public Graph {
   const std::vector<int> &getChildren(int node) const override;
   int getNodeCount() const override;
   void makeSorted(bool reverse);
- public:
  private:
   std::vector<std::vector<int>> children;
 };
@@ -62,32 +61,41 @@ void ListGraph::makeSorted(bool reverse = false) {
       std::sort(kids.begin(), kids.end());
 }
 
-bool dfsWalk(int start, const Graph &graph, std::vector<char> &states, std::vector<int> &path) {
+enum NodeState {
+  NotVisited,
+  Visiting,
+  Visited
+};
+
+bool tryNoCycleWalk(int start,
+                    const Graph &graph,
+                    std::vector<NodeState> &states,
+                    std::vector<int> &path) {
   std::vector<int> stack;
   stack.push_back(start);
 
   while (!stack.empty()) {
     int vertex = stack.back();
 
-    if (states[vertex] == 2) {
+    if (states[vertex] == Visited) {
       stack.pop_back();
       continue;
     }
 
-    states[vertex] = 1;
-    const std::vector<int>& children = graph.getChildren(vertex);
+    states[vertex] = Visiting;
+    const std::vector<int> &children = graph.getChildren(vertex);
 
     for (int i = children.size() - 1; i >= 0; --i) {
-      if (states[children[i]] == 1) {
+      if (states[children[i]] == Visiting) {
         return false;
-      } else if (states[children[i]] == 0) {
+      } else if (states[children[i]] == NotVisited) {
         stack.push_back(children[i]);
       }
     }
 
     while (!stack.empty() && states[stack.back()] == 1) {
       path.push_back(stack.back());
-      states[stack.back()] = 2;
+      states[stack.back()] = Visited;
       stack.pop_back();
     }
   }
@@ -95,14 +103,14 @@ bool dfsWalk(int start, const Graph &graph, std::vector<char> &states, std::vect
   return true;
 }
 
-std::vector<int> solve(ListGraph& graph, const std::vector<bool>& isSource) {
+std::vector<int> topologicSort(ListGraph &graph, const std::vector<bool> &isSource) {
 //  graph.makeSorted(true);
   std::vector<int> path;
-  std::vector<char> states(graph.getNodeCount(), 0);
+  std::vector<NodeState> states(graph.getNodeCount(), NotVisited);
 
   for (int i = 0; i < graph.getNodeCount(); ++i) {
     if (states[i] == 0) {
-      if (!dfsWalk(i, graph, states, path))
+      if (!tryNoCycleWalk(i, graph, states, path))
         return {};
     }
   }
@@ -125,7 +133,7 @@ int main() {
     isSource[v] = false;
   }
 
-  std::vector<int> res = solve(graph, isSource);
+  std::vector<int> res = topologicSort(graph, isSource);
 
   if (res.empty()) {
     std::cout << "NO\n";
